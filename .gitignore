@@ -1,0 +1,5 @@
+*/objs/
+*/cudaAggregate
+# !.gitignore
+# !*.cu
+# !*.cpp
