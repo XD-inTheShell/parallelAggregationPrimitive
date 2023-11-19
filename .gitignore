@@ -1,6 +1,7 @@
 */objs/
 */cudaAggregate
 */inputs/*
+*/out.txt
 # !.gitignore
 # !*.cu
 # !*.cpp

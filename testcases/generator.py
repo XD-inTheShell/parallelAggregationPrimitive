@@ -1,10 +1,10 @@
 import random
 
-TESTNUM = 100000
+TESTNUM = 1000000
 KEYRANGE = 1000
 VALRANGE = 10.0
 
-f = open("seq_impl/in.txt", "w")
+f = open("inputs/in.txt", "w")
 
 
 
