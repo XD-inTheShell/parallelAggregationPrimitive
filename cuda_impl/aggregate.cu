@@ -14,7 +14,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cuco/dynamic_map.cuh>
-#include "common.h"
+#include "../common.h"
 #define STEP_TSIZE 100 // Set it to maximum size the GPU global memory can hold
 #define THREAD_TSIZE 9 // Assuming if no colliding keys, what's the maximum key-value
                         // pair a thread can hold.
@@ -49,9 +49,11 @@
 
     
 // }
-int cudaAggregate(std::vector<int> &keys, std::vector<double> &values, std::unordered_map<int, double> &umap){
-    using Key   = int;
-    using Count = uint32_t;
+
+// NOTE: CAN NOT INSERT 0 VALUE!
+int cudaAggregate(std::vector<int> &keys, std::vector<Value> &values, std::unordered_map<int, Value> &umap){
+    using Key = int;
+    using Count = Value;
     auto constexpr num_keys = KEYSIZE;
     auto constexpr load_factor = 0.5;
     std::size_t const capacity = std::ceil(num_keys / load_factor);
@@ -70,11 +72,11 @@ int cudaAggregate(std::vector<int> &keys, std::vector<double> &values, std::unor
     int * device_keys;
     int * device_keys_res;
     int * device_res_size;
-    double * device_values, * device_values_res;
+    Value * device_values, * device_values_res;
     std::cout << typeid( device_res_size).name() << std::endl;
     std::cout << typeid( device_keys).name() << std::endl;
     int keys_res[stepSize];
-    double values_res[stepSize];
+    Value values_res[stepSize];
     // Thread ID < cutoff_info[0] should complete THREAD_TSIZE computations
     // Thread ID = cutoff_info[0] should complete cutoff_info[1] compute
     // Thread ID > cutoff_info[0] should not compute 
@@ -83,10 +85,10 @@ int cudaAggregate(std::vector<int> &keys, std::vector<double> &values, std::unor
     cudaMalloc((void **)&device_cutoff_info, sizeof(int)*2);
     cudaMalloc((void **)&device_res_size, sizeof(int));
     cudaMalloc((void **)&device_keys, sizeof(int) * stepSize);
-    cudaMalloc((void **)&device_values, sizeof(double) * stepSize);
+    cudaMalloc((void **)&device_values, sizeof(Value) * stepSize);
 
     cudaMalloc((void **)&device_keys_res, sizeof(int) * stepSize);
-    cudaMalloc((void **)&device_values_res, sizeof(double) * stepSize);
+    cudaMalloc((void **)&device_values_res, sizeof(Value) * stepSize);
 
     for(long unsigned int i=0; i<numEntries;){
         printf("%d\n", numEntries);
@@ -111,8 +113,8 @@ int cudaAggregate(std::vector<int> &keys, std::vector<double> &values, std::unor
         int* key_start = i + keys.data();
         cudaMemcpy(device_keys, key_start, sizeof(int) * count, cudaMemcpyHostToDevice);
 
-        double* value_start = i + values.data();
-        cudaMemcpy(device_values, value_start, sizeof(double) * count, cudaMemcpyHostToDevice);
+        Value* value_start = i + values.data();
+        cudaMemcpy(device_values, value_start, sizeof(Value) * count, cudaMemcpyHostToDevice);
 
         // Call function
 
@@ -121,12 +123,12 @@ int cudaAggregate(std::vector<int> &keys, std::vector<double> &values, std::unor
         // cudaMemcpy(keys_res, device_keys_res, sizeof(int)*res_size, cudaMemcpyDeviceToHost);
         // cudaMemcpy(values_res, device_values_res, sizeof(double)*res_size, cudaMemcpyDeviceToHost);
         cudaMemcpy(keys_res, device_keys, sizeof(int)*res_size, cudaMemcpyDeviceToHost);
-        cudaMemcpy(values_res, device_values, sizeof(double)*res_size, cudaMemcpyDeviceToHost);
+        cudaMemcpy(values_res, device_values, sizeof(Value)*res_size, cudaMemcpyDeviceToHost);
         // printf("%ld\n", i);
         printf("%ld\n", count);
         for(int j=0; j<res_size; j++){
             int key = keys_res[j];
-            double value = values_res[j];
+            Value value = values_res[j];
             auto search = umap.find(key);
             if ( search != umap.end())
                 search->second += value;

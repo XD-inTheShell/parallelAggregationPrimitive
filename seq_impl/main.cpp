@@ -9,6 +9,7 @@
 #include <iostream>
 #include <sstream>
 #include <map>
+#include "../common.h"
 
 int seq_impl(std::string fileName) {
     std::ifstream inFile;
@@ -19,14 +20,18 @@ int seq_impl(std::string fileName) {
 
     std::string line;
 
-    std::unordered_map<int, double> umap;
+    std::unordered_map<int, Value> umap;
     while (std::getline(inFile, line)) {
         std::stringstream sstream(line);
         std::string str;
         std::getline(sstream, str, ' ');
         int key         = (int)atoi(str.c_str());
         std::getline(sstream, str, ' ');
-        double value    = (double)atof(str.c_str());
+        #ifdef VALUEINT
+            Value value    = (int)atoi(str.c_str());
+        #else
+            Value value    = (double)atof(str.c_str());
+        #endif
 
         auto search = umap.find(key);
         if ( search != umap.end())
@@ -37,7 +42,7 @@ int seq_impl(std::string fileName) {
     inFile.close();
 
     // Finished addition, write to file
-    std::map<int, double> res(umap.begin(), umap.end());
+    std::map<int, Value> res(umap.begin(), umap.end());
 
     fileName = "out.txt";
     std::ofstream file(fileName);

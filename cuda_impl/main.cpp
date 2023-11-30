@@ -10,9 +10,9 @@
 #include <sstream>
 #include <map>
 #include <vector>
-
-int cudaAggregate(std::vector<int> &keys, std::vector<double> &values, std::unordered_map<int, double> &umap);
-int readFile(std::string fileName, std::vector<int> &keys, std::vector<double> &values){
+#include "../common.h"
+int cudaAggregate(std::vector<int> &keys, std::vector<Value> &values, std::unordered_map<int, Value> &umap);
+int readFile(std::string fileName, std::vector<int> &keys, std::vector<Value> &values){
     std::ifstream inFile;
     inFile.open(fileName);
     if (!inFile) {
@@ -26,14 +26,18 @@ int readFile(std::string fileName, std::vector<int> &keys, std::vector<double> &
         int key         = (int)atoi(str.c_str());
         keys.push_back(key);
         std::getline(sstream, str, ' ');
-        double value    = (double)atof(str.c_str());
+        #ifdef VALUEINT
+            Value value    = (int)atoi(str.c_str());
+        #else
+            Value value    = (double)atof(str.c_str());
+        #endif
         values.push_back(value);
     }
     inFile.close();
     return 0;
 }
-int writeFile(std::string fileName, std::vector<int> &keys, std::vector<double> &values, std::unordered_map<int, double> &umap){
-    std::map<int, double> res(umap.begin(), umap.end());
+int writeFile(std::string fileName, std::vector<int> &keys, std::vector<Value> &values, std::unordered_map<int, Value> &umap){
+    std::map<int, Value> res(umap.begin(), umap.end());
 
     fileName = "out.txt";
     std::ofstream file(fileName);
@@ -65,10 +69,10 @@ int writeFile(std::string fileName, std::vector<int> &keys, std::vector<double> 
 int main(int argc, char** argv)
 {
     printf("HI\n");
-    
+
     std::vector<int> keys;
-    std::vector<double> values;
-    std::unordered_map<int, double> umap;
+    std::vector<Value> values;
+    std::unordered_map<int, Value> umap;
     readFile("../testcases/inputs/in.txt", keys, values);
     cudaAggregate(keys, values, umap);
     writeFile("out.txt", keys, values, umap);
