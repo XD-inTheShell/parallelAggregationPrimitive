@@ -13,8 +13,9 @@
 #include <vector>
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <cuco/dynamic_map.cuh>
+// #include <cuco/dynamic_map.cuh>
 #include "../common.h"
+#include "basichash.h"
 #define STEP_TSIZE 100 // Set it to maximum size the GPU global memory can hold
 #define THREAD_TSIZE 9 // Assuming if no colliding keys, what's the maximum key-value
                         // pair a thread can hold.
@@ -24,149 +25,91 @@
 #define GRIDDIMX 4
 #define GRIDDIMY 4
 #define GRIDSIZE 16
-
-// __global__ aggregateKernel(Map map_view,
-//                             int * device_cutoff_info,
-//                             int * device_keys, int * device_keys_res,  int * device_res_size
-//                             double * device_values, double * device_values_res){
-template <typename Map>
-__global__ void cuCollectAggregateKernel(Map map_view,
-                            int * device_cutoff_info,
-                            Key * device_keys, 
-                            Value * device_values){
-
-    int index_inblock = threadIdx.y * blockDim.x + threadIdx.x;
-    int index = (blockIdx.y * gridDim.x + blockIdx.x) * BLOCKSIZE + index_inblock;
-    int task_size = THREAD_TSIZE;
-    if(device_cutoff_info[0]!=-1){
-        if(index > device_cutoff_info[0]){
-            task_size = 0;
-        } else if(index == device_cutoff_info[0]){
-            task_size = device_cutoff_info[1];
+// perhaps implement one without interleaving
+__global__ void simplehashAggregate(KeyValue* hashtable, 
+                            Key * device_keys, Value * device_values,
+                            unsigned int cap, unsigned int base, unsigned int step){
+    unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int offset = index + base;
+    for(unsigned int i=offset; i<offset+step; i++){
+        if(index < cap){
+            Key key     = device_keys[i];
+            Value value = device_values[i];
+            hashtable_update(hashtable, key, value);
         }
     }
-    long unsigned int offset = index * THREAD_TSIZE;
-    Key* key_offset = device_keys + offset;
-    Value* value_offset = device_values + offset;
     
-    for(int i=0; i<task_size; i++){
-        Value value = device_values[i];
-        Key key = device_keys[i];
-        auto slot = map_viewfind(key);
-        if(slot!=map_view.end()){
-            slot->second.fetch_add(value, cuda::memory_order_relaxed);
-        } else{
-            map_view.insert(key, value);
-        }
-    }
 
-
-    
 }
 
-__device__ 
-
-// NOTE: CAN NOT INSERT 0 VALUE!
-
-    using Count = Value;
-    // auto constexpr num_keys = KEYSIZE;
-    // auto constexpr load_factor = 0.5;
-    std::size_t const capacity = KEYSIZE;
-    Key constexpr empty_key_sentinel     = static_cast<Key>(-1);
-    Count constexpr empty_value_sentinel = static_cast<Count>(0);
-    cuco::static_map<Key, Count> map{
-        capacity, cuco::empty_key{empty_key_sentinel}, cuco::empty_value{empty_value_sentinel}};
-    auto device_insert_view = map.get_device_mutable_view();
-
+void checkCuda(){
+    cudaError_t errCode = cudaPeekAtLastError();
+    if (errCode != cudaSuccess) {
+        fprintf(stderr, "WARNING: A CUDA error occured: code=%d, %s\n", errCode, cudaGetErrorString(errCode));
+    }
+}
+int cudaAggregate(std::vector<int> &keys, std::vector<Value> &values, std::unordered_map<int, Value> &umap){
     auto constexpr block_size = BLOCKSIZE;
     auto const grid_size      = GRIDSIZE;
-    
+    long unsigned int totalsize = keys.size();
+    unsigned int roundstep = (totalsize+(block_size*grid_size))/(block_size*grid_size);
 
-    long unsigned int numEntries = values.size();
-    int perBlockKeyMax = BLOCKSIZE * THREAD_TSIZE;
-    int perGridKeyMax = GRIDSIZE * perBlockKeyMax;
-    int stepSize = perGridKeyMax;
-    printf("stepSize %d\n", stepSize);
-    // long unsigned int numEntries = 1;
-    int * device_cutoff_info;
+    KeyValue* devic_hashtable = create_hashtable();
+    KeyValue host_hashtable[KEYSIZE];
+
     Key * device_keys;
-    Key * device_keys_res;
-    int * device_res_size;
-    Value * device_values, * device_values_res;
-    std::cout << typeid( device_res_size).name() << std::endl;
-    std::cout << typeid( device_keys).name() << std::endl;
-    Key keys_res[stepSize];
-    Value values_res[stepSize];
-    // Thread ID < cutoff_info[0] should complete THREAD_TSIZE computations
-    // Thread ID = cutoff_info[0] should complete cutoff_info[1] compute
-    // Thread ID > cutoff_info[0] should not compute 
-    int cutoff_info[2];
+    Value * device_values;
+    // todo: change this
+    int copySize = totalsize;
+    cudaMalloc((void **)&device_keys, sizeof(unsigned int) * copySize);
+    checkCuda();
+    cudaMalloc((void **)&device_values, sizeof(Value) * copySize);
+    checkCuda();
+    cudaMemcpy(device_keys, keys.data(), sizeof(unsigned int) * copySize, cudaMemcpyHostToDevice);
+    checkCuda();
+    cudaMemcpy(device_values, values.data(), sizeof(Value) * copySize, cudaMemcpyHostToDevice);
+    checkCuda();
 
-    cudaMalloc((void **)&device_cutoff_info, sizeof(int)*2);
-    cudaMalloc((void **)&device_res_size, sizeof(int));
-    cudaMalloc((void **)&device_keys, sizeof(int) * stepSize);
-    cudaMalloc((void **)&device_values, sizeof(Value) * stepSize);
+    simplehashAggregate<<<grid_size, block_size>>>(devic_hashtable,
+                device_keys, device_values,
+                keys.size(), 0,  roundstep);
+    checkCuda();
+    // print_hashtable(devic_hashtable, host_hashtable);
 
-    cudaMalloc((void **)&device_keys_res, sizeof(int) * stepSize);
-    cudaMalloc((void **)&device_values_res, sizeof(Value) * stepSize);
+    // for(long unsigned int i=0; i<numEntries;){
+    //     printf("%d\n", numEntries);
+    //     long unsigned int end;
+    //     long unsigned int next;
+    //     long unsigned int count;
+    //     int res_size;
+    //     next = i+stepSize;
+    //     if(next > numEntries){
+    //         count = numEntries - i;
+    //         cutoff_info[0] = count / THREAD_TSIZE;
+    //         cutoff_info[1] = count % THREAD_TSIZE;
+    //     }
+    //     else {
+    //         count = stepSize;
+    //         cutoff_info[0] = -1;
+    //     }
 
-    for(long unsigned int i=0; i<numEntries;){
-        printf("%d\n", numEntries);
-        long unsigned int end;
-        long unsigned int next;
-        long unsigned int count;
-        int res_size;
-        next = i+stepSize;
-        if(next > numEntries){
-            count = numEntries - i;
-            cutoff_info[0] = count / THREAD_TSIZE;
-            cutoff_info[1] = count % THREAD_TSIZE;
-        }
-        else {
-            count = stepSize;
-            cutoff_info[0] = -1;
-        }
+    //     cudaMemcpy(device_cutoff_info, cutoff_info, sizeof(int) * 2, cudaMemcpyHostToDevice);
 
-        cudaMemcpy(device_cutoff_info, cutoff_info, sizeof(int) * 2, cudaMemcpyHostToDevice);
+    //     printf("cutoff[0]=%d, cutoff[1]= %d\n", cutoff_info[0], cutoff_info[1]);
+    //     int* key_start = i + keys.data();
+    //     cudaMemcpy(device_keys, key_start, sizeof(int) * count, cudaMemcpyHostToDevice);
 
-        printf("cutoff[0]=%d, cutoff[1]= %d\n", cutoff_info[0], cutoff_info[1]);
-        int* key_start = i + keys.data();
-        cudaMemcpy(device_keys, key_start, sizeof(int) * count, cudaMemcpyHostToDevice);
+    //     Value* value_start = i + values.data();
+    //     cudaMemcpy(device_values, value_start, sizeof(Value) * count, cudaMemcpyHostToDevice);
 
-        Value* value_start = i + values.data();
-        cudaMemcpy(device_values, value_start, sizeof(Value) * count, cudaMemcpyHostToDevice);
+    //     // Call function
+    //     cuCollectAggregateKernel<<<grid_size, block_size>>>(
+    //                 device_insert_view, 
+    //                 device_cutoff_info,
+    //                 device_keys,
+    //                 device_values);
 
-        // Call function
-        cuCollectAggregateKernel<<<grid_size, block_size>>>(
-                    device_insert_view, 
-                    device_cutoff_info,
-                    device_keys,
-                    device_values);
-
-        // cudaMemcpy(&res_size, device_res_size, sizeof(int), cudaMemcpyDeviceToHost);
-        // res_size = count;
-        // // cudaMemcpy(keys_res, device_keys_res, sizeof(int)*res_size, cudaMemcpyDeviceToHost);
-        // // cudaMemcpy(values_res, device_values_res, sizeof(double)*res_size, cudaMemcpyDeviceToHost);
-        // cudaMemcpy(keys_res, device_keys, sizeof(int)*res_size, cudaMemcpyDeviceToHost);
-        // cudaMemcpy(values_res, device_values, sizeof(Value)*res_size, cudaMemcpyDeviceToHost);
-        // // printf("%ld\n", i);
-        // printf("%ld\n", count);
-        // for(int j=0; j<res_size; j++){
-        //     int key = keys_res[j];
-        //     Value value = values_res[j];
-        //     auto search = umap.find(key);
-        //     if ( search != umap.end())
-        //         search->second += value;
-        //     else
-        //         umap[key] = value;
-        // }
-
-
-        i = next;
-    }
-    thrust::device_vector<Key> keys_extract(KEYSIZE);
-    thrust::device_vector<Value> values_extract(KEYSIZE);
-    auto ends = map.retrieve_all(keys_extract.begin(), values_extract.begin());
-    printf("cuda file hi\n");
+    //     i = next;
+    // }
     return 0;
 }

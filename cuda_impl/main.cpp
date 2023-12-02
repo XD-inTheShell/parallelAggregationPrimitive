@@ -11,6 +11,7 @@
 #include <map>
 #include <vector>
 #include "../common.h"
+
 int cudaAggregate(std::vector<int> &keys, std::vector<Value> &values, std::unordered_map<int, Value> &umap);
 int readFile(std::string fileName, std::vector<int> &keys, std::vector<Value> &values){
     std::ifstream inFile;
@@ -75,6 +76,6 @@ int main(int argc, char** argv)
     std::unordered_map<int, Value> umap;
     readFile("../testcases/inputs/in.txt", keys, values);
     cudaAggregate(keys, values, umap);
-    writeFile("out.txt", keys, values, umap);
+    // writeFile("out.txt", keys, values, umap);
     return 0;
 }
