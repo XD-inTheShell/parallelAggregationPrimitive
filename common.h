@@ -1,8 +1,8 @@
-#define KEYSIZE 100
+#define KEYSIZE 128
 #define VALUEINT
 #ifdef VALUEINT
-    using Value = unsigned int;
+    using Value = uint32_t;
 #else
     using Value = double;
 #endif
-using Key = unsigned int;
+using Key = uint32_t;

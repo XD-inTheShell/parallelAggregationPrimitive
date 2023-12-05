@@ -12,8 +12,10 @@
 #include <vector>
 #include "../common.h"
 
-int cudaAggregate(std::vector<int> &keys, std::vector<Value> &values, std::unordered_map<int, Value> &umap);
-int readFile(std::string fileName, std::vector<int> &keys, std::vector<Value> &values){
+int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
+int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
+int test(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
+int readFile(std::string fileName, std::vector<Key> &keys, std::vector<Value> &values){
     std::ifstream inFile;
     inFile.open(fileName);
     if (!inFile) {
@@ -24,11 +26,11 @@ int readFile(std::string fileName, std::vector<int> &keys, std::vector<Value> &v
         std::stringstream sstream(line);
         std::string str;
         std::getline(sstream, str, ' ');
-        int key         = (int)atoi(str.c_str());
+        Key key         = (Key)atoi(str.c_str());
         keys.push_back(key);
         std::getline(sstream, str, ' ');
         #ifdef VALUEINT
-            Value value    = (int)atoi(str.c_str());
+            Value value    = (Value)atoi(str.c_str());
         #else
             Value value    = (double)atof(str.c_str());
         #endif
@@ -37,8 +39,8 @@ int readFile(std::string fileName, std::vector<int> &keys, std::vector<Value> &v
     inFile.close();
     return 0;
 }
-int writeFile(std::string fileName, std::vector<int> &keys, std::vector<Value> &values, std::unordered_map<int, Value> &umap){
-    std::map<int, Value> res(umap.begin(), umap.end());
+int writeFile(std::string fileName, std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap){
+    std::map<Key, Value> res(umap.begin(), umap.end());
 
     fileName = "out.txt";
     std::ofstream file(fileName);
@@ -46,7 +48,7 @@ int writeFile(std::string fileName, std::vector<int> &keys, std::vector<Value> &
         std::cout << "error writing file \"" << fileName << "\"" << std::endl;
         return 0;
     }
-    file << std::setprecision(9);
+    
     for (auto d : res) {
         file << d.first << " " << d.second << std::endl;
     }
@@ -71,11 +73,13 @@ int main(int argc, char** argv)
 {
     printf("HI\n");
 
-    std::vector<int> keys;
+    std::vector<Key> keys;
     std::vector<Value> values;
-    std::unordered_map<int, Value> umap;
+    std::unordered_map<Key, Value> umap;
     readFile("../testcases/inputs/in.txt", keys, values);
-    cudaAggregate(keys, values, umap);
-    // writeFile("out.txt", keys, values, umap);
+    // simpleHashAggregate(keys, values, umap);
+    cucoHashAggregate(keys, values, umap);
+    test(keys, values, umap);
+    writeFile("out.txt", keys, values, umap);
     return 0;
 }

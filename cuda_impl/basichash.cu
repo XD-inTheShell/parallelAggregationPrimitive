@@ -3,60 +3,60 @@
 // which is lock free insert, but do not ensure the modification of
 // value thread safe.
 
-#include "basichash.h"
+#include "basichash.cuh"
 #include "../common.h"
 #include <stdlib.h>
 #include <stdio.h>
 __device__ uint32_t hash(uint32_t k)
 {
-    // k ^= k >> 16;
-    // k *= 0x85ebca6b;
-    // k ^= k >> 13;
-    // k *= 0xc2b2ae35;
-    // k ^= k >> 16;
-    // return k & (kHashTableCapacity-1);
+    k ^= k >> 16;
+    k *= 0x85ebca6b;
+    k ^= k >> 13;
+    k *= 0xc2b2ae35;
+    k ^= k >> 16;
+    return k & (kHashTableCapacity-1);
 }
 
 __device__ void atomicAddValue(KeyValue* hashtable, uint32_t slot, Value value){
-    hashtable[slot].value = 1111;
-    // Value prevv = hashtable[slot].value;
-    // Value writev = prevv + value;
-    // while(atomicCAS(&hashtable[slot].value, prevv, writev)!=prevv){
-    //     prevv = hashtable[slot].value;
-    //     writev = prevv + value;
-    // }
+    // hashtable[slot].value = 1111;
+    Value prevv = hashtable[slot].value;
+    Value writev = prevv + value;
+    while(atomicCAS(&hashtable[slot].value, prevv, writev)!=prevv){
+        prevv = hashtable[slot].value;
+        writev = prevv + value;
+    }
     return;
 }
 
 // todo: handle VALUE = EMPTYVALUESENTINEL
-__device__ void hashtable_update(KeyValue* hashtable, Key key, Value value)
+__device__  __inline__ void hashtable_update(KeyValue* hashtable, Key key, Value value)
 {
-    // uint32_t slot = hash(key);
+    uint32_t slot = hash(key);
 
-    // while (true)
-    // {
-    //     Key prev = atomicCAS(&hashtable[slot].key, kEmpty, key);
-    //     if (prev == kEmpty)
-    //     {
-    //         Value prevv = atomicCAS(&hashtable[slot].value, vEmpty, value);
-    //         // No thread gets before me
-    //         if(prevv == vEmpty){
-    //             return;
-    //         }
-    //         // Some thread with the same key gets before me and wrote its value
-    //         // I need to add my value to its value
-    //         atomicAddValue(hashtable, slot, value);
-    //         // Function only returns if it succesfully added my value, safe to return.
-    //         return; 
-    //     } else if(prev == key) {
-    //         // Some other thread with the same key inserted,
-    //         // since we share the same key, I need to atomically add mine.
-    //         atomicAddValue(hashtable, slot, value);
-    //         return;
-    //     }
+    while (true)
+    {
+        Key prev = atomicCAS(&hashtable[slot].key, kEmpty, key);
+        if (prev == kEmpty)
+        {
+            Value prevv = atomicCAS(&hashtable[slot].value, vEmpty, value);
+            // No thread gets before me
+            if(prevv == vEmpty){
+                return;
+            }
+            // Some thread with the same key gets before me and wrote its value
+            // I need to add my value to its value
+            atomicAddValue(hashtable, slot, value);
+            // Function only returns if it succesfully added my value, safe to return.
+            return; 
+        } else if(prev == key) {
+            // Some other thread with the same key inserted,
+            // since we share the same key, I need to atomically add mine.
+            atomicAddValue(hashtable, slot, value);
+            return;
+        }
 
-    //     slot = (slot + 1) & (kHashTableCapacity-1);
-    // }
+        slot = (slot + 1) & (kHashTableCapacity-1);
+    }
     
 }
 
@@ -74,7 +74,19 @@ void print_hashtable(KeyValue* device_hashtable, KeyValue* host_hashtable){
     cudaMemcpy(host_hashtable, device_hashtable, sizeof(KeyValue) * kHashTableCapacity,
                cudaMemcpyDeviceToHost);
     for(int i=0; i<kHashTableCapacity; i++){
-        printf("entry %d: \tkey-%x, value-%x\n", i, host_hashtable[i].key, host_hashtable[i].value);
+        printf("entry %d: \tkey=%x, value=%x\n", i, host_hashtable[i].key, host_hashtable[i].value);
+    }
+}
+
+void export_hashtable(KeyValue* device_hashtable, KeyValue* host_hashtable, std::unordered_map<Key, Value> &umap){
+    cudaMemcpy(host_hashtable, device_hashtable, sizeof(KeyValue) * kHashTableCapacity,
+               cudaMemcpyDeviceToHost);
+    for(int i=0; i<kHashTableCapacity; i++){
+        if(host_hashtable[i].key!=kEmpty){
+            // printf("entry %d: \tkey=%u, value=%u\n", i, host_hashtable[i].key, host_hashtable[i].value);
+            umap[host_hashtable[i].key]=host_hashtable[i].value;
+        }
+        
     }
 }
 
@@ -94,6 +106,27 @@ KeyValue* create_hashtable()
     // cudaMemset(hashtable, 0xff, sizeof(KeyValue) * kHashTableCapacity);
 
     return hashtable;
+}
+
+__global__ void simplehashAggregateKernel(KeyValue* hashtable, 
+                            Key * device_keys, Value * device_values,
+                            long unsigned int cap, long unsigned int base, 
+                            unsigned int step, unsigned int const launch_thread){
+    long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+    long unsigned int start = index * launch_thread;
+    long unsigned int offset = index + base;
+    // Key key     = device_keys[index];
+    //         Value value = device_values[index];
+    //         hashtable_update(hashtable, key, index);
+    for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
+        if((i+base) < cap){
+            Key key     = device_keys[i];
+            Value value = device_values[i];
+            hashtable_update(hashtable, key, value);
+        }
+    }
+    
+
 }
 // __device__ bool void hashtable_lookup(KeyValue* hashtable, KeyValue* kvs, unsigned int numkvs)
 // {

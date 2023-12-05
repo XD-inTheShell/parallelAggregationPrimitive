@@ -22,4 +22,7 @@ for i in range(TESTNUM):
 
     f.write(f'{key} {int(value)}\n')
 
+# for i in range(50):
+#     f.write(f'{i} {int(i)}\n')
+
 f.close()

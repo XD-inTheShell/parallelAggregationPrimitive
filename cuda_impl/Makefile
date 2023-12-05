@@ -11,10 +11,10 @@ all: $(EXECUTABLE)
 OBJDIR=objs
 CXX=g++ -m64
 CXXFLAGS=-O3 -Wall
-# LDFLAGS=-L/usr/local/cuda-12.1/lib64/ -lcudart
-LDFLAGS=-L/usr/local/cuda-11.7/lib64/ -lcudart
-# IFLAGS=-I/home/xiying/parallelAggregationPrimitive/cuda_impl/include
-IFLAGS=-I/afs/andrew.cmu.edu/usr24/xiyingd/parallelAggregationPrimitive/cuda_impl/include/cuco
+LDFLAGS=-L/usr/local/cuda-12.1/lib64/ -lcudart
+# LDFLAGS=-L/usr/local/cuda-11.7/lib64/ -lcudart
+IFLAGS=-I/home/xiying/parallelAggregationPrimitive/cuda_impl/include
+# IFLAGS=-I/afs/andrew.cmu.edu/usr24/xiyingd/parallelAggregationPrimitive/cuda_impl/include/cuco
 NVCC=nvcc
 NVCCFLAGS=-O3 -m64 --gpu-architecture compute_61 -ccbin /usr/bin/gcc -std=c++17 --expt-extended-lambda --expt-relaxed-constexpr
 
