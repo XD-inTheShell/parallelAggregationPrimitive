@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+// The hashmaps in this implementation assumes that hash key can 
+// not be erased.
 __device__ uint32_t hash(uint32_t k)
 {
     k ^= k >> 16;
@@ -17,7 +19,56 @@ __device__ uint32_t hash(uint32_t k)
     k ^= k >> 16;
     return k & (kHashTableCapacity-1);
 }
+// Local Hashtable ------------------------------
+__device__ void localhashUpdate(KeyValue* privateHashtable,
+                                 uint32_t key, uint32_t value){
+    uint32_t slot = hash(key);
+    while (true)
+    {
+        // Insert myself
+        if (privateHashtable[slot].key==kEmpty){
+            privateHashtable[slot].key = key;
+            privateHashtable[slot].value = value;
+            return;
+        } 
+        // Insertion failed, check if this is my slot 
+        else if(privateHashtable[slot].key==key){
+            privateHashtable[slot].value += value;
+            return;
+        }   
+        slot = (slot + 1) & (kHashTableCapacity-1);
+    }
+}
+__global__ void localhashAggregate(KeyValue* globalHashtable,
+                            Key * device_keys, Value * device_values,
+                            long unsigned int cap, long unsigned int base, 
+                            unsigned int step, unsigned int const launch_thread){
 
+    KeyValue privateHashtable[KEYSIZE];
+    for(int i=0; i<KEYSIZE; i++){
+        privateHashtable[i].key = kEmpty;
+        // privateHashtable[i].value = vEmpty;
+    }
+
+    long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+    for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
+        if((i+base) < cap){
+            Key key     = device_keys[i];
+            Value value = device_values[i];
+            localhashUpdate(privateHashtable, key, value);
+        }
+    }
+
+    // Write to global hash
+    for(int i=0; i<KEYSIZE; i++){
+        Key key = privateHashtable[i].key;
+        if(key!=kEmpty){
+            Value value = privateHashtable[i].value;
+            hashtable_update(globalHashtable, key, value);
+        }
+    }
+}
+// Global Hashtable -----------------------------
 __device__ void atomicAddValue(KeyValue* hashtable, uint32_t slot, Value value){
     // hashtable[slot].value = 1111;
     Value prevv = hashtable[slot].value;

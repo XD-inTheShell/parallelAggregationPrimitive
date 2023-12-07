@@ -13,6 +13,7 @@
 #include "../common.h"
 
 int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
+int localHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
 int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
 int test(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
 int readFile(std::string fileName, std::vector<Key> &keys, std::vector<Value> &values){
@@ -74,10 +75,15 @@ int main(int argc, char** argv)
 
     std::vector<Key> keys;
     std::vector<Value> values;
-    std::unordered_map<Key, Value> shumap, cuumap;
+    std::unordered_map<Key, Value> shumap, loumap, cuumap;
     readFile("../testcases/inputs/in.txt", keys, values);
+
     simpleHashAggregate(keys, values, shumap);
     writeFile("out/shout.txt", keys, values, shumap);
+
+    localHashAggregate(keys, values, loumap);
+    writeFile("out/loout.txt", keys, values, loumap);
+
     cucoHashAggregate(keys, values, cuumap);
     // test(keys, values, umap);
     writeFile("out/cuout.txt", keys, values, cuumap);

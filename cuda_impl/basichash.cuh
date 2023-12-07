@@ -26,3 +26,7 @@ __global__ void simplehashAggregateKernel(KeyValue* hashtable,
                             Key * device_keys, Value * device_values,
                             long unsigned int cap, long unsigned int base, 
                             unsigned int step, unsigned int const launch_thread);
+__global__ void localhashAggregate(KeyValue* globalHashtable,
+                            Key * device_keys, Value * device_values,
+                            long unsigned int cap, long unsigned int base, 
+                            unsigned int step, unsigned int const launch_thread);                            
