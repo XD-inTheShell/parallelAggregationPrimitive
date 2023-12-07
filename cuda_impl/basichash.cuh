@@ -2,11 +2,14 @@
 #include <cuda_runtime.h>
 #include "../common.h"
 #include <map>
+#include <bits/stdc++.h>
 struct KeyValue
 {
     uint32_t key;
     uint32_t value;
 };
+
+
 
 const uint32_t kHashTableCapacity = KEYSIZE;
 const uint32_t kEmpty = 0xffffffff;

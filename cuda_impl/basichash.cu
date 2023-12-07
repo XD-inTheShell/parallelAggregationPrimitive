@@ -7,6 +7,7 @@
 #include "../common.h"
 #include <stdlib.h>
 #include <stdio.h>
+
 __device__ uint32_t hash(uint32_t k)
 {
     k ^= k >> 16;

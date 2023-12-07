@@ -1,8 +1,8 @@
 import random
 
-TESTNUM = 1000
-KEYSIZE = 100
-KEYRANGE = 1000
+TESTNUM = 1000000
+KEYSIZE = 1000
+KEYRANGE = 20000
 VALRANGE = 10
 
 f = open("../testcases/inputs/in.txt", "w")

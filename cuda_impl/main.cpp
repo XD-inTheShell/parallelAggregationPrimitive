@@ -42,7 +42,6 @@ int readFile(std::string fileName, std::vector<Key> &keys, std::vector<Value> &v
 int writeFile(std::string fileName, std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap){
     std::map<Key, Value> res(umap.begin(), umap.end());
 
-    fileName = "out.txt";
     std::ofstream file(fileName);
     if (!file) {
         std::cout << "error writing file \"" << fileName << "\"" << std::endl;
@@ -75,11 +74,12 @@ int main(int argc, char** argv)
 
     std::vector<Key> keys;
     std::vector<Value> values;
-    std::unordered_map<Key, Value> umap;
+    std::unordered_map<Key, Value> shumap, cuumap;
     readFile("../testcases/inputs/in.txt", keys, values);
-    // simpleHashAggregate(keys, values, umap);
-    cucoHashAggregate(keys, values, umap);
-    test(keys, values, umap);
-    writeFile("out.txt", keys, values, umap);
+    simpleHashAggregate(keys, values, shumap);
+    writeFile("out/shout.txt", keys, values, shumap);
+    cucoHashAggregate(keys, values, cuumap);
+    // test(keys, values, umap);
+    writeFile("out/cuout.txt", keys, values, cuumap);
     return 0;
 }

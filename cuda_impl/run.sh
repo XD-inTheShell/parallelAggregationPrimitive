@@ -5,4 +5,5 @@ pwd
 cd ../cuda_impl
 pwd
 ./cudaAggregate
-diff out.txt ../seq_impl/out.txt 
+diff out/shout.txt ../seq_impl/out.txt 
+diff out/cuout.txt ../seq_impl/out.txt 

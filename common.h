@@ -1,4 +1,4 @@
-#define KEYSIZE 128
+#define KEYSIZE 16384
 #define VALUEINT
 #ifdef VALUEINT
     using Value = uint32_t;
