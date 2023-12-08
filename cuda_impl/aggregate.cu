@@ -1,19 +1,4 @@
-#include <stdio.h>
-#include <algorithm>
-#include <stdlib.h>
-#include <getopt.h>
-#include <string>
-#include <cstring>
-#include <unordered_map> 
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-#include <sstream>
-#include <map>
-#include <vector>
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include "CycleTimer.h"
+
 // #include <cuco/dynamic_map.cuh>
 #include "../common.h"
 #include "basichash.cuh"
@@ -29,13 +14,7 @@
 
 #include <cuco/static_map.cuh>
 
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <thrust/execution_policy.h>
-#include <thrust/iterator/zip_iterator.h>
-#include <thrust/logical.h>
-#include <thrust/sequence.h>
-#include <thrust/tuple.h>
+
 
 #include <cmath>
 #include <cstddef>
@@ -43,29 +22,24 @@
 #include <limits>
 
 // #include "cucohash.cuh"
-#define STEP_TSIZE 100 // Set it to maximum size the GPU global memory can hold
-#define THREAD_TSIZE 9 // Assuming if no colliding keys, what's the maximum key-value
-                        // pair a thread can hold.
-#define BLOCKDIMX 16
-#define BLOCKDIMY 16
-#define BLOCKSIZE BLOCKDIMX*BLOCKDIMY
-#define GRIDDIMX 4
-#define GRIDDIMY 4
-#define GRIDSIZE 16
-#define PERTHREADSTEP 1000
-
-template <typename Map>
-__global__ void cuCollectAggregateKernel(Map map_view,
-                            Key * device_keys, Value * device_values,
-                            long unsigned int cap, long unsigned int base, 
-                            unsigned int step, unsigned int const launch_thread);
-
 void checkCuda(){
     cudaError_t errCode = cudaPeekAtLastError();
     if (errCode != cudaSuccess) {
         fprintf(stderr, "WARNING: A CUDA error occured: code=%d, %s\n", errCode, cudaGetErrorString(errCode));
     }
 }
+
+template <typename Map>
+__global__ void cuCollectAggregateKernel(Map map_view,
+                            Key * device_keys, Value * device_values,
+                            long unsigned int cap, long unsigned int base, 
+                            unsigned int step, unsigned int const launch_thread);
+template <typename Map>
+__global__ void localhashCucoaggregate(Map map_view,
+                            Key * device_keys, Value * device_values,
+                            long unsigned int cap, long unsigned int base, 
+                            unsigned int step, unsigned int const launch_thread);
+
 int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap){
     long unsigned int numEntries = keys.size();
 
@@ -275,6 +249,77 @@ int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::u
     return 0;
 }
 
+// int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap){
+//     long unsigned int numEntries = keys.size();
+
+//     auto constexpr block_size   = BLOCKSIZE;
+//     auto const grid_size        = GRIDSIZE;
+//     unsigned int const launch_thread = block_size * grid_size;
+//     auto const launch_size      = launch_thread * PERTHREADSTEP;
+
+//     // Malloc
+//     Key * device_keys;
+//     // thrust::device_vector<Key> device_keys(numEntries);
+//     // thrust::copy(keys.begin(), keys.end(), device_keys.begin());
+//     Value * device_values;
+//     // thrust::device_vector<Value> device_values(numEntries);
+//     // thrust::copy(values.begin(), values.end(), device_values.begin());
+
+//     cudaMalloc((void **)&device_keys, sizeof(Key) * launch_size);
+//     checkCuda();
+//     cudaMalloc((void **)&device_values, sizeof(Value) * launch_size);
+//     checkCuda();
+
+//     std::size_t const capacity = KEYSIZE;
+//     using Count = Value;
+//     Key constexpr empty_key_sentinel     = static_cast<Key>(kEmpty);
+//     Count constexpr empty_value_sentinel = static_cast<Count>(vEmpty);
+//     cuco::static_map<Key, Count> map{
+//         capacity, cuco::empty_key{empty_key_sentinel}, cuco::empty_value{empty_value_sentinel}};
+//     auto device_insert_view = map.get_device_mutable_view();
+
+//     for (long unsigned int i=0; i<numEntries; i+=launch_size){
+        
+//         unsigned int copySize = std::min((numEntries-i), (long unsigned int)launch_size);
+        
+//         printf("start from %ld, compute size %d\n", i, copySize);
+//         cudaMemcpy(device_keys, keys.data()+i, sizeof(Key) * copySize, cudaMemcpyHostToDevice);
+//         checkCuda();
+//         cudaMemcpy(device_values, values.data()+i, sizeof(Value) * copySize, cudaMemcpyHostToDevice);
+//         checkCuda();
+//         double startTime = CycleTimer::currentSeconds();
+//         localhashCucoaggregate<<<grid_size, block_size>>>(device_insert_view,
+//                 device_keys, device_values,
+//                 numEntries, i,  PERTHREADSTEP, launch_thread);
+//         cudaThreadSynchronize();
+//         double endTime = CycleTimer::currentSeconds();    
+//         double overallDuration = endTime - startTime;
+//         printf("Cuco Hash Executed for: %.3f ms\n", 1000.f * overallDuration);
+
+//         checkCuda();
+//     }
+//     // unsigned int copySize = numEntries;
+//     // cudaMemcpy(device_keys, keys.data(), sizeof(Key) * copySize, cudaMemcpyHostToDevice);
+//     // checkCuda();
+//     // cudaMemcpy(device_values, values.data(), sizeof(Value) * copySize, cudaMemcpyHostToDevice);
+//     // checkCuda();
+//     // cucohashAggregateKernel<<<grid_size, block_size>>>(device_insert_view,
+//     //             device_keys, device_values,
+//     //             numEntries, 0,  PERTHREADSTEP, launch_thread);
+
+//     thrust::device_vector<Key> contained_keys(KEYSIZE);
+//     thrust::device_vector<Value> contained_values(KEYSIZE);
+//     auto [keyenditr, valenditr] = map.retrieve_all(contained_keys.begin(), contained_values.begin());
+//     int num = std::distance(contained_keys.begin(), keyenditr);
+//     for(int i=0; i<num; i++){
+        
+//         Key key = contained_keys[i];
+//         Value val = contained_values[i];
+//         // printf("key %u value %u\n", key, val);
+//         umap[key] = val;
+//     }
+//     return 0;
+// }
 // template <typename Map, typename KeyIter, typename ValueIter, typename Predicate>
 // __global__ void filtered_insert(Map map_view,
 //                                 KeyIter key_begin,

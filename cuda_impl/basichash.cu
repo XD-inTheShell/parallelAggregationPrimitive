@@ -7,6 +7,7 @@
 #include "../common.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <cuco/static_map.cuh>
 
 // The hashmaps in this implementation assumes that hash key can 
 // not be erased.
@@ -67,6 +68,112 @@ __global__ void localhashAggregate(KeyValue* globalHashtable,
             hashtable_update(globalHashtable, key, value);
         }
     }
+}
+
+template <typename Map>
+__global__ void localhashCucoaggregate(Map  map_view,
+                            Key * device_keys, Value * device_values,
+                            long unsigned int cap, long unsigned int base, 
+                            unsigned int step, unsigned int const launch_thread){
+
+    KeyValue privateHashtable[KEYSIZE];
+    for(int i=0; i<KEYSIZE; i++){
+        privateHashtable[i].key = kEmpty;
+        privateHashtable[i].value = vEmpty;
+    }
+
+    long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+    for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
+        if((i+base) < cap){
+            Key key     = device_keys[i];
+            Value value = device_values[i];
+            localhashUpdate(privateHashtable, key, value);
+        }
+    }
+
+    // Write to global hash
+    for(int i=0; i<KEYSIZE; i++){
+        Key key = privateHashtable[i].key;
+        if(key!=kEmpty){
+            Value value = privateHashtable[i].value;
+            auto [slot, is_new_key] = map_view.insert_and_find({key, value});
+            if (!is_new_key) {
+                 // key is already in the map -> increment count
+                slot->second.fetch_add(value, cuda::memory_order_relaxed);
+            }
+        }
+    }
+}
+int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap){
+    long unsigned int numEntries = keys.size();
+
+    auto constexpr block_size   = BLOCKSIZE;
+    auto const grid_size        = GRIDSIZE;
+    unsigned int const launch_thread = block_size * grid_size;
+    auto const launch_size      = launch_thread * PERTHREADSTEP;
+
+    // Malloc
+    Key * device_keys;
+    // thrust::device_vector<Key> device_keys(numEntries);
+    // thrust::copy(keys.begin(), keys.end(), device_keys.begin());
+    Value * device_values;
+    // thrust::device_vector<Value> device_values(numEntries);
+    // thrust::copy(values.begin(), values.end(), device_values.begin());
+
+    cudaMalloc((void **)&device_keys, sizeof(Key) * launch_size);
+    checkCuda();
+    cudaMalloc((void **)&device_values, sizeof(Value) * launch_size);
+    checkCuda();
+
+    std::size_t const capacity = KEYSIZE;
+    using Count = Value;
+    Key constexpr empty_key_sentinel     = static_cast<Key>(kEmpty);
+    Count constexpr empty_value_sentinel = static_cast<Count>(vEmpty);
+    cuco::static_map<Key, Count> map{
+        capacity, cuco::empty_key{empty_key_sentinel}, cuco::empty_value{empty_value_sentinel}};
+    auto device_insert_view = map.get_device_mutable_view();
+
+    for (long unsigned int i=0; i<numEntries; i+=launch_size){
+        
+        unsigned int copySize = std::min((numEntries-i), (long unsigned int)launch_size);
+        
+        printf("start from %ld, compute size %d\n", i, copySize);
+        cudaMemcpy(device_keys, keys.data()+i, sizeof(Key) * copySize, cudaMemcpyHostToDevice);
+        checkCuda();
+        cudaMemcpy(device_values, values.data()+i, sizeof(Value) * copySize, cudaMemcpyHostToDevice);
+        checkCuda();
+        double startTime = CycleTimer::currentSeconds();
+        localhashCucoaggregate<<<grid_size, block_size>>>(device_insert_view,
+                device_keys, device_values,
+                numEntries, i,  PERTHREADSTEP, launch_thread);
+        cudaThreadSynchronize();
+        double endTime = CycleTimer::currentSeconds();    
+        double overallDuration = endTime - startTime;
+        printf("Local Hash & Cuco Aggregate Executed for: %.3f ms\n", 1000.f * overallDuration);
+
+        checkCuda();
+    }
+    // unsigned int copySize = numEntries;
+    // cudaMemcpy(device_keys, keys.data(), sizeof(Key) * copySize, cudaMemcpyHostToDevice);
+    // checkCuda();
+    // cudaMemcpy(device_values, values.data(), sizeof(Value) * copySize, cudaMemcpyHostToDevice);
+    // checkCuda();
+    // cucohashAggregateKernel<<<grid_size, block_size>>>(device_insert_view,
+    //             device_keys, device_values,
+    //             numEntries, 0,  PERTHREADSTEP, launch_thread);
+
+    thrust::device_vector<Key> contained_keys(KEYSIZE);
+    thrust::device_vector<Value> contained_values(KEYSIZE);
+    auto [keyenditr, valenditr] = map.retrieve_all(contained_keys.begin(), contained_values.begin());
+    int num = std::distance(contained_keys.begin(), keyenditr);
+    for(int i=0; i<num; i++){
+        
+        Key key = contained_keys[i];
+        Value val = contained_values[i];
+        // printf("key %u value %u\n", key, val);
+        umap[key] = val;
+    }
+    return 0;
 }
 // Global Hashtable -----------------------------
 __device__ void atomicAddValue(KeyValue* hashtable, uint32_t slot, Value value){

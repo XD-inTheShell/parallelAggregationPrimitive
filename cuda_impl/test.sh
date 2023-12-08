@@ -8,3 +8,4 @@ pwd
 diff out/shout.txt ../seq_impl/out.txt
 diff out/loout.txt ../seq_impl/out.txt 
 diff out/cuout.txt ../seq_impl/out.txt 
+diff out/lcout.txt ../seq_impl/out.txt 

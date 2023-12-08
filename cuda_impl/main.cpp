@@ -15,6 +15,7 @@
 int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
 int localHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
 int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
+int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
 int test(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
 int readFile(std::string fileName, std::vector<Key> &keys, std::vector<Value> &values){
     std::ifstream inFile;
@@ -75,7 +76,7 @@ int main(int argc, char** argv)
 
     std::vector<Key> keys;
     std::vector<Value> values;
-    std::unordered_map<Key, Value> shumap, loumap, cuumap;
+    std::unordered_map<Key, Value> shumap, loumap, cuumap, lcumap;
     readFile("../testcases/inputs/in.txt", keys, values);
 
     simpleHashAggregate(keys, values, shumap);
@@ -87,5 +88,8 @@ int main(int argc, char** argv)
     cucoHashAggregate(keys, values, cuumap);
     // test(keys, values, umap);
     writeFile("out/cuout.txt", keys, values, cuumap);
+
+    localncucoHashAggregate(keys, values, lcumap);
+    writeFile("out/lcout.txt", keys, values, lcumap);
     return 0;
 }
