@@ -70,6 +70,58 @@ __global__ void localhashAggregate(KeyValue* globalHashtable,
     }
 }
 
+// Local Hashtable with Shared Hashtable ------------------------------
+__global__ void localhashSharedAggregate(KeyValue* globalHashtable,
+                            Key * device_keys, Value * device_values,
+                            long unsigned int cap, long unsigned int base, 
+                            unsigned int step, unsigned int const launch_thread){
+
+    __shared__ KeyValue sharedHashtable[KEYSIZE];
+    KeyValue privateHashtable[KEYSIZE];
+    for(int i=0; i<KEYSIZE; i++){
+        privateHashtable[i].key = kEmpty;
+        privateHashtable[i].value = 0;
+        if(threadIdx.x==0){
+            sharedHashtable[i].key = kEmpty;
+            sharedHashtable[i].value = vEmpty;
+        }
+    }
+
+    long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+    for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
+        if((i+base) < cap){
+            Key key     = device_keys[i];
+            Value value = device_values[i];
+            localhashUpdate(privateHashtable, key, value);
+        }
+    }
+
+    
+    for(int i=0; i<KEYSIZE; i++){
+        Key key = privateHashtable[i].key;
+        if(key!=kEmpty){
+            Value value = privateHashtable[i].value;
+            // if(value != 0 ){
+                hashtable_update(sharedHashtable, key, value);
+            // }
+            
+        }
+    }
+
+    // Write to global hash
+    __syncthreads();
+    if(threadIdx.x==0){
+        for(int i=0; i<KEYSIZE; i++){
+            Key key = sharedHashtable[i].key;
+            if(key!=kEmpty){
+                Value value = sharedHashtable[i].value;
+                hashtable_update(globalHashtable, key, value);
+            }
+        }
+    }
+    
+}
+// Local Hashtable and Cuco Map Aggregation ------------------------------
 template <typename Map>
 __global__ void localhashCucoaggregate(Map  map_view,
                             Key * device_keys, Value * device_values,
