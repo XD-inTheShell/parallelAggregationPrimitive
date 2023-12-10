@@ -15,7 +15,7 @@
 #include <sycl/sycl.hpp>
 #include <sycl/atomic.hpp>
 
-#define kHashTableCapacity 16
+#define kHashTableCapacity 128//16384
 #define N 1000000
 #define KEY_EMPTY 0xFFFFFFFF
 
@@ -27,13 +27,14 @@ struct kv
 };
 
 
-int readFile(std::string fileName, std::vector<uint32_t> &keys, std::vector<Value> &values){
+int readFile(std::string fileName, std::vector<uint32_t> &keys, std::vector<Value> &values, int size){
     std::ifstream inFile;
     inFile.open(fileName);
     if (!inFile) {
         return false;
     }
     std::string line;
+    int i = 0;
     while (std::getline(inFile, line)) {
         std::stringstream sstream(line);
         std::string str;
@@ -47,6 +48,8 @@ int readFile(std::string fileName, std::vector<uint32_t> &keys, std::vector<Valu
             Value value    = (double)atof(str.c_str());
         #endif
         values.push_back(value);
+        i++;
+        if(i == size) break;
     }
     inFile.close();
     return 0;
@@ -106,11 +109,12 @@ inline uint32_t hash(uint32_t k){
     k *= 0xc2b2ae35;
     k ^= k >> 16;
     return k & (kHashTableCapacity-1);
+    // return 0;
 }
 
 // void atomic_update(uint32_t* value, unint32_t*)
 
-void insert(kv* hashtable, uint32_t key, uint32_t value, stream os)
+void insert(kv* hashtable, uint32_t key, uint32_t value)
 {
     uint32_t slot = hash(key);
 
@@ -175,7 +179,8 @@ uint32_t lookup(kv* hashtable, uint32_t key)
 
 
 int main(){
-    auto selector = default_selector_v;
+    //auto selector = default_selector_v;
+    auto selector = cpu_selector_v;
 
     queue q(selector, exception_handler);
 
@@ -184,7 +189,7 @@ int main(){
     std::cerr << "hi" << std::endl;
     std::vector<uint32_t> vec_keys;
     std::vector<uint32_t> vec_values;
-    readFile("../testcases/inputs/in.txt", vec_keys, vec_values);
+    readFile("../testcases/inputs/in.txt", vec_keys, vec_values, N);
     uint32_t keys[N];
     uint32_t values[N];
     std::copy(vec_keys.begin(), vec_keys.end(), keys);
@@ -213,24 +218,15 @@ int main(){
     });
     
     // q.memcpy(&values, dev_vals, values.size()*sizeof(uint32_t)).wait();
+    q.wait();
+    auto t0 = std::chrono::steady_clock::now();
     q.submit([&](handler& h){
-        stream os(1024, 128, h);
-        // h.single_task([=](){
+        //stream os(1024, 128, h);
         h.parallel_for(N, [=](item<1> i){
-            //os <<  "here" << "\n";
-            // for(int i = 0; i < N; i++){
-            //     os << dev_keys[i] << "\n";
-            // }
-            // for(int i = 0; i < N; i++){
-            //     os << hex << hashtable[i].key << "\n";
-            // }
-            //for(int i = 0; i < N; i++){
                 uint32_t key = dev_keys[i];
                 uint32_t value = dev_vals[i];
                 uint32_t slot = lookup(hashtable, key);
-                //os << "look up returned " << slot << " to " << key << "\n";
                 if (slot != KEY_EMPTY){
-                    //os << "adding " << value << " to " << key << "\n";
                     auto ref = atomic_ref<
                         uint32_t, 
                         memory_order::relaxed,
@@ -239,14 +235,25 @@ int main(){
                     ref.fetch_add(value);
                 }
                 else{
-                    //os << key << "inserting" << value<< "\n";
-                    insert(hashtable, key, value, os);
+                    insert(hashtable, key, value);
                 }
             //}
             //os << "done" << "\n";
         });
-    }).wait();
+    }).wait();//.wait();
+    auto t1 = std::chrono::steady_clock::now();
+    q.wait();
     q.memcpy(hashtable_host, hashtable, sizeof(kv)*kHashTableCapacity).wait();
+    auto t2 = std::chrono::steady_clock::now();
+    std::chrono::duration<double> submission_time = t1 - t0;
+    std::chrono::duration<double> total_time = t2 - t0;
+    std::chrono::duration<double> diff = t2-t1;
+
+    std::cout << "submission time " << submission_time.count()*1000 << "ms" << "\n";
+    std::cout << "total time " << total_time.count()*1000 << "ms" << "\n";
+    std::cout << "diff" << diff.count()*1000 << "ms\n";
+
+    
     std::map<uint32_t, uint32_t> res;
     for(int i = 0; i < kHashTableCapacity; i++){
         if(hashtable_host[i].key != KEY_EMPTY){

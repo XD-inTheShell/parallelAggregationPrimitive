@@ -2,7 +2,7 @@ import random
 
 TESTNUM = 1000000
 # TESTNUM = 10
-KEYRANGE = 10
+KEYRANGE = 100
 VALRANGE = 10
 
 f = open("inputs/in.txt", "w")
