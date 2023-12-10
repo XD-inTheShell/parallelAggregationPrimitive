@@ -20,15 +20,15 @@ int seq_impl(std::string fileName) {
 
     std::string line;
 
-    std::unordered_map<int, Value> umap;
+    std::unordered_map<Key, Value> umap;
     while (std::getline(inFile, line)) {
         std::stringstream sstream(line);
         std::string str;
         std::getline(sstream, str, ' ');
-        int key         = (int)atoi(str.c_str());
+        Key key         = (Key)atoi(str.c_str());
         std::getline(sstream, str, ' ');
         #ifdef VALUEINT
-            Value value    = (int)atoi(str.c_str());
+            Value value    = (Key)atoi(str.c_str());
         #else
             Value value    = (double)atof(str.c_str());
         #endif
@@ -42,7 +42,7 @@ int seq_impl(std::string fileName) {
     inFile.close();
 
     // Finished addition, write to file
-    std::map<int, Value> res(umap.begin(), umap.end());
+    std::map<Key, Value> res(umap.begin(), umap.end());
 
     fileName = "out.txt";
     std::ofstream file(fileName);

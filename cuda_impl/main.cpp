@@ -11,41 +11,61 @@
 #include <map>
 #include <vector>
 #include "../common.h"
-int cudaAggregate(std::vector<int> &keys, std::vector<Value> &values, std::unordered_map<int, Value> &umap);
-int readFile(std::string fileName, std::vector<int> &keys, std::vector<Value> &values){
+
+int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
+int localHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
+int localHashnSharedAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap, int debug);
+int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
+int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
+int test(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
+int readFile(std::string fileName, 
+                std::vector<Key> &ukeys, std::vector<Value> &uvalues,
+                std::vector<Key> &okeys, std::vector<Value> &ovalues){
     std::ifstream inFile;
     inFile.open(fileName);
     if (!inFile) {
         return false;
     }
     std::string line;
+    
+    std::vector<std::pair<Key, Value>> entries;
     while (std::getline(inFile, line)) {
         std::stringstream sstream(line);
         std::string str;
+        std::pair<Key, Value> entry;
         std::getline(sstream, str, ' ');
-        int key         = (int)atoi(str.c_str());
-        keys.push_back(key);
+        Key key         = (Key)atoi(str.c_str());
+        ukeys.push_back(key);
+        entry.first = key;
         std::getline(sstream, str, ' ');
         #ifdef VALUEINT
-            Value value    = (int)atoi(str.c_str());
+            Value value    = (Value)atoi(str.c_str());
         #else
             Value value    = (double)atof(str.c_str());
         #endif
-        values.push_back(value);
+        uvalues.push_back(value);
+        entry.second = value;
+        entries.push_back(entry);
+    }
+
+    std::sort(entries.begin(), entries.end());
+    for (auto entry : entries){
+        okeys.push_back(entry.first);
+        ovalues.push_back(entry.second);
+        // printf("%u %u \n", entry.first, entry.second);
     }
     inFile.close();
     return 0;
 }
-int writeFile(std::string fileName, std::vector<int> &keys, std::vector<Value> &values, std::unordered_map<int, Value> &umap){
-    std::map<int, Value> res(umap.begin(), umap.end());
+int writeFile(std::string fileName, std::unordered_map<Key, Value> &umap){
+    std::map<Key, Value> res(umap.begin(), umap.end());
 
-    fileName = "out.txt";
     std::ofstream file(fileName);
     if (!file) {
         std::cout << "error writing file \"" << fileName << "\"" << std::endl;
         return 0;
     }
-    file << std::setprecision(9);
+    
     for (auto d : res) {
         file << d.first << " " << d.second << std::endl;
     }
@@ -73,11 +93,48 @@ int main(int argc, char** argv)
 {
     printf("HI\n");
 
-    std::vector<int> keys;
-    std::vector<Value> values;
-    std::unordered_map<int, Value> umap;
-    readFile("../testcases/inputs/in.txt", keys, values);
-    cudaAggregate(keys, values, umap);
-    writeFile("out.txt", keys, values, umap);
+    std::vector<Key> ukeys, okeys;
+    std::vector<Value> uvalues, ovalues;
+    std::unordered_map<Key, Value> shumap, loumap, lsumap, cuumap, lcumap;
+    readFile("../testcases/inputs/in.txt", ukeys, uvalues, okeys, ovalues);
+    printf("----------------------Unsorted Keys----------------------- \n");
+    simpleHashAggregate(ukeys, uvalues, shumap);
+    // writeFile("out/shout.txt", shumap);
+
+    localHashAggregate(ukeys, uvalues, loumap);
+    // writeFile("out/loout.txt", loumap);
+
+    localHashnSharedAggregate(ukeys, uvalues, lsumap,0);
+    // writeFile("out/lsout.txt", lsumap);
+
+    cucoHashAggregate(ukeys, uvalues, cuumap);
+    // test(ukeys, uvalues, umap);
+    // writeFile("out/cuout.txt", cuumap);
+
+    localncucoHashAggregate(ukeys, uvalues, lcumap);
+    // writeFile("out/lcout.txt", lcumap);
+
+    printf("----------------------Sorted Keys----------------------- \n");
+    shumap.clear(); 
+    loumap.clear(); 
+    lsumap.clear(); 
+    cuumap.clear(); 
+    lcumap.clear();
+    simpleHashAggregate(okeys, ovalues, shumap);
+    writeFile("out/shout.txt", shumap);
+
+    localHashAggregate(okeys, ovalues, loumap);
+    writeFile("out/loout.txt", loumap);
+
+    localHashnSharedAggregate(okeys, ovalues, lsumap,1);
+    writeFile("out/lsout.txt", lsumap);
+
+    cucoHashAggregate(okeys, ovalues, cuumap);
+    // test(okeys, ovalues, umap);
+    writeFile("out/cuout.txt", cuumap);
+
+    localncucoHashAggregate(okeys, ovalues, lcumap);
+    writeFile("out/lcout.txt", lcumap);
+    
     return 0;
 }
