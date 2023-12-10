@@ -3,11 +3,21 @@
 #include "../common.h"
 #include <map>
 #include <bits/stdc++.h>
-struct KeyValue
+
+struct KeyValue_t
 {
     uint32_t key;
     uint32_t value;
 };
+
+union KeyValue
+{   
+    KeyValue_t KeyValue_s;
+    unsigned long long int KeyValue_i;
+    
+};
+
+
 
 
 

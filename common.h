@@ -23,6 +23,7 @@
 #include <thrust/tuple.h>
 
 #define KEYSIZE 128
+
 #define VALUEINT
 #ifdef VALUEINT
     using Value = uint32_t;

@@ -27,14 +27,14 @@ __device__ void localhashUpdate(KeyValue* privateHashtable,
     while (true)
     {
         // Insert myself
-        if (privateHashtable[slot].key==kEmpty){
-            privateHashtable[slot].key = key;
-            privateHashtable[slot].value = value;
+        if (privateHashtable[slot].KeyValue_s.key      ==kEmpty){
+            privateHashtable[slot].KeyValue_s.key      = key;
+            privateHashtable[slot].KeyValue_s.value    = value;
             return;
         } 
         // Insertion failed, check if this is my slot 
-        else if(privateHashtable[slot].key==key){
-            privateHashtable[slot].value += value;
+        else if(privateHashtable[slot].KeyValue_s.key==key){
+            privateHashtable[slot].KeyValue_s.value += value;
             return;
         }   
         slot = (slot + 1) & (kHashTableCapacity-1);
@@ -47,8 +47,8 @@ __global__ void localhashAggregate(KeyValue* globalHashtable,
 
     KeyValue privateHashtable[KEYSIZE];
     for(int i=0; i<KEYSIZE; i++){
-        privateHashtable[i].key = kEmpty;
-        // privateHashtable[i].value = vEmpty;
+        privateHashtable[i].KeyValue_s.key = kEmpty;
+        // privateHashtable[i].KeyValue_s.value = vEmpty;
     }
 
     long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -62,9 +62,9 @@ __global__ void localhashAggregate(KeyValue* globalHashtable,
 
     // Write to global hash
     for(int i=0; i<KEYSIZE; i++){
-        Key key = privateHashtable[i].key;
+        Key key = privateHashtable[i].KeyValue_s.key;
         if(key!=kEmpty){
-            Value value = privateHashtable[i].value;
+            Value value = privateHashtable[i].KeyValue_s.value;
             hashtable_update(globalHashtable, key, value);
         }
     }
@@ -79,11 +79,11 @@ __global__ void localhashSharedAggregate(KeyValue* globalHashtable,
     __shared__ KeyValue sharedHashtable[KEYSIZE];
     KeyValue privateHashtable[KEYSIZE];
     for(int i=0; i<KEYSIZE; i++){
-        privateHashtable[i].key = kEmpty;
-        privateHashtable[i].value = 0;
+        privateHashtable[i].KeyValue_s.key = kEmpty;
+        privateHashtable[i].KeyValue_s.value = 0;
         if(threadIdx.x==0){
-            sharedHashtable[i].key = kEmpty;
-            sharedHashtable[i].value = vEmpty;
+            sharedHashtable[i].KeyValue_s.key = kEmpty;
+            sharedHashtable[i].KeyValue_s.value = vEmpty;
         }
     }
 
@@ -98,9 +98,9 @@ __global__ void localhashSharedAggregate(KeyValue* globalHashtable,
 
     
     for(int i=0; i<KEYSIZE; i++){
-        Key key = privateHashtable[i].key;
+        Key key = privateHashtable[i].KeyValue_s.key;
         if(key!=kEmpty){
-            Value value = privateHashtable[i].value;
+            Value value = privateHashtable[i].KeyValue_s.value;
             // if(value != 0 ){
                 hashtable_update(sharedHashtable, key, value);
             // }
@@ -112,9 +112,9 @@ __global__ void localhashSharedAggregate(KeyValue* globalHashtable,
     __syncthreads();
     if(threadIdx.x==0){
         for(int i=0; i<KEYSIZE; i++){
-            Key key = sharedHashtable[i].key;
+            Key key = sharedHashtable[i].KeyValue_s.key;
             if(key!=kEmpty){
-                Value value = sharedHashtable[i].value;
+                Value value = sharedHashtable[i].KeyValue_s.value;
                 hashtable_update(globalHashtable, key, value);
             }
         }
@@ -130,8 +130,8 @@ __global__ void localhashCucoaggregate(Map  map_view,
 
     KeyValue privateHashtable[KEYSIZE];
     for(int i=0; i<KEYSIZE; i++){
-        privateHashtable[i].key = kEmpty;
-        privateHashtable[i].value = vEmpty;
+        privateHashtable[i].KeyValue_s.key = kEmpty;
+        privateHashtable[i].KeyValue_s.value = vEmpty;
     }
 
     long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -145,9 +145,9 @@ __global__ void localhashCucoaggregate(Map  map_view,
 
     // Write to global hash
     for(int i=0; i<KEYSIZE; i++){
-        Key key = privateHashtable[i].key;
+        Key key = privateHashtable[i].KeyValue_s.key;
         if(key!=kEmpty){
-            Value value = privateHashtable[i].value;
+            Value value = privateHashtable[i].KeyValue_s.value;
             auto [slot, is_new_key] = map_view.insert_and_find({key, value});
             if (!is_new_key) {
                  // key is already in the map -> increment count
@@ -229,11 +229,11 @@ int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, 
 }
 // Global Hashtable -----------------------------
 __device__ void atomicAddValue(KeyValue* hashtable, uint32_t slot, Value value){
-    // hashtable[slot].value = 1111;
-    Value prevv = hashtable[slot].value;
+    // hashtable[slot].KeyValue_s.value = 1111;
+    Value prevv = hashtable[slot].KeyValue_s.value;
     Value writev = prevv + value;
-    while(atomicCAS(&hashtable[slot].value, prevv, writev)!=prevv){
-        prevv = hashtable[slot].value;
+    while(atomicCAS(&hashtable[slot].KeyValue_s.value, prevv, writev)!=prevv){
+        prevv = hashtable[slot].KeyValue_s.value;
         writev = prevv + value;
     }
     return;
@@ -243,13 +243,38 @@ __device__ void atomicAddValue(KeyValue* hashtable, uint32_t slot, Value value){
 __device__  __inline__ void hashtable_update(KeyValue* hashtable, Key key, Value value)
 {
     uint32_t slot = hash(key);
+    // KeyValue pEmpty;
+    // pEmpty.KeyValue_s.key = kEmpty;
+    // pEmpty.KeyValue_s.value = vEmpty;
+    // while (true)
+    // {
+    //     KeyValue current = hashtable[slot];
+    //     if(current.KeyValue_s.key==kEmpty){
+    //         KeyValue insert;
+    //         insert.KeyValue_s.key = key;
+    //         insert.KeyValue_s.value = value;
+    //         current.KeyValue_i = atomicCAS(&hashtable[slot].KeyValue_i, pEmpty.KeyValue_i, insert.KeyValue_i);
+    //     }
+        
+    //     if (current.KeyValue_s.key == kEmpty)
+    //     {
+    //         return; 
+    //     } else if(current.KeyValue_s.key == key) {
+    //         // Some other thread with the same key inserted,
+    //         // since we share the same key, I need to atomically add mine.
+    //         atomicAddValue(hashtable, slot, value);
+    //         return;
+    //     }
+
+    //     slot = (slot + 1) & (kHashTableCapacity-1);
+    // }
 
     while (true)
     {
-        Key prev = atomicCAS(&hashtable[slot].key, kEmpty, key);
+        Key prev = atomicCAS(&hashtable[slot].KeyValue_s.key, kEmpty, key);
         if (prev == kEmpty)
         {
-            Value prevv = atomicCAS(&hashtable[slot].value, vEmpty, value);
+            Value prevv = atomicCAS(&hashtable[slot].KeyValue_s.value, vEmpty, value);
             // No thread gets before me
             if(prevv == vEmpty){
                 return;
@@ -274,8 +299,8 @@ __device__  __inline__ void hashtable_update(KeyValue* hashtable, Key key, Value
 __global__ void hashtable_empty(KeyValue* hashtable){
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     if(index < kHashTableCapacity){
-        hashtable[index].key    = kEmpty;
-        hashtable[index].value  = vEmpty;
+        hashtable[index].KeyValue_s.key    = kEmpty;
+        hashtable[index].KeyValue_s.value  = vEmpty;
     }
 
     return;
@@ -285,7 +310,7 @@ void print_hashtable(KeyValue* device_hashtable, KeyValue* host_hashtable){
     cudaMemcpy(host_hashtable, device_hashtable, sizeof(KeyValue) * kHashTableCapacity,
                cudaMemcpyDeviceToHost);
     for(int i=0; i<kHashTableCapacity; i++){
-        printf("entry %d: \tkey=%x, value=%x\n", i, host_hashtable[i].key, host_hashtable[i].value);
+        printf("entry %d: \tkey=%x, value=%x\n", i, host_hashtable[i].KeyValue_s.key, host_hashtable[i].KeyValue_s.value);
     }
 }
 
@@ -293,9 +318,9 @@ void export_hashtable(KeyValue* device_hashtable, KeyValue* host_hashtable, std:
     cudaMemcpy(host_hashtable, device_hashtable, sizeof(KeyValue) * kHashTableCapacity,
                cudaMemcpyDeviceToHost);
     for(int i=0; i<kHashTableCapacity; i++){
-        if(host_hashtable[i].key!=kEmpty){
-            // printf("entry %d: \tkey=%u, value=%u\n", i, host_hashtable[i].key, host_hashtable[i].value);
-            umap[host_hashtable[i].key]=host_hashtable[i].value;
+        if(host_hashtable[i].KeyValue_s.key!=kEmpty){
+            // printf("entry %d: \tkey=%u, value=%u\n", i, host_hashtable[i].KeyValue_s.key, host_hashtable[i].KeyValue_s.value);
+            umap[host_hashtable[i].KeyValue_s.key]=host_hashtable[i].KeyValue_s.value;
         }
         
     }
@@ -344,19 +369,19 @@ __global__ void simplehashAggregateKernel(KeyValue* hashtable,
 //     unsigned int threadid = blockIdx.x * blockDim.x + threadIdx.x;
 //     if (threadid < numkvs)
 //     {
-//         uint32_t key = kvs[threadid].key;
+//         uint32_t key = kvs[threadid].KeyValue_s.key;
 //         uint32_t slot = hash(key);
 
 //         while (true)
 //         {
-//             if (hashtable[slot].key == key)
+//             if (hashtable[slot].KeyValue_s.key == key)
 //             {
-//                 kvs[threadid].value = hashtable[slot].value;
+//                 kvs[threadid].KeyValue_s.value = hashtable[slot].KeyValue_s.value;
 //                 return;
 //             }
-//             if (hashtable[slot].key == kEmpty)
+//             if (hashtable[slot].KeyValue_s.key == kEmpty)
 //             {
-//                 kvs[threadid].value = kEmpty;
+//                 kvs[threadid].KeyValue_s.value = kEmpty;
 //                 return;
 //             }
 //             slot = (slot + 1) & (kHashTableCapacity - 1);
