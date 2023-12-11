@@ -40,7 +40,9 @@ using Key = uint32_t;
 #define BLOCKSIZE BLOCKDIMX*BLOCKDIMY
 #define GRIDDIMX 4
 #define GRIDDIMY 4
-#define GRIDSIZE 16
+#define GRIDSIZE 84
 #define PERTHREADSTEP 1000
+
+extern unsigned int computestep;
 
 void checkCuda();

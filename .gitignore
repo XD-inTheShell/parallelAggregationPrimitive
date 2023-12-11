@@ -2,6 +2,7 @@
 */cudaAggregate
 */inputs/*
 */out.txt
+*/out/*
 !/testcasds/testin.txt
 # !.gitignore
 # !*.cu

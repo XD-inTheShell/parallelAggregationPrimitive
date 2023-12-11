@@ -12,12 +12,14 @@
 #include <vector>
 #include "../common.h"
 
+unsigned int computestep;
+
 int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
 int localHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
 int localHashnSharedAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap, int debug);
 int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
 int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
-int test(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
+int test();
 int readFile(std::string fileName, 
                 std::vector<Key> &ukeys, std::vector<Value> &uvalues,
                 std::vector<Key> &okeys, std::vector<Value> &ovalues){
@@ -94,6 +96,10 @@ int main(int argc, char** argv)
     std::vector<Value> uvalues, ovalues;
     std::unordered_map<Key, Value> shumap, loumap, lsumap, cuumap, lcumap;
     readFile("../testcases/inputs/in.txt", ukeys, uvalues, okeys, ovalues);
+
+    
+    computestep = ukeys.size()/(GRIDSIZE*BLOCKSIZE)+1;
+    printf("step is %u\n", computestep);
     printf("----------------------Unsorted Keys----------------------- \n");
     simpleHashAggregate(ukeys, uvalues, shumap);
     // writeFile("out/shout.txt", shumap);
@@ -127,7 +133,7 @@ int main(int argc, char** argv)
     writeFile("out/lsout.txt", lsumap);
 
     cucoHashAggregate(okeys, ovalues, cuumap);
-    // test(okeys, ovalues, umap);
+
     writeFile("out/cuout.txt", cuumap);
 
     localncucoHashAggregate(okeys, ovalues, lcumap);

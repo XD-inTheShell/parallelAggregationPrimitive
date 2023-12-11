@@ -194,10 +194,12 @@ int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, 
         checkCuda();
         cudaMemcpy(device_values, values.data()+i, sizeof(Value) * copySize, cudaMemcpyHostToDevice);
         checkCuda();
+
+        cudaThreadSynchronize();
         double startTime = CycleTimer::currentSeconds();
         localhashCucoaggregate<<<grid_size, block_size>>>(device_insert_view,
                 device_keys, device_values,
-                numEntries, i,  PERTHREADSTEP, launch_thread);
+                numEntries, i,  computestep, launch_thread);
         cudaThreadSynchronize();
         double endTime = CycleTimer::currentSeconds();    
         double overallDuration = endTime - startTime;
@@ -229,13 +231,13 @@ int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, 
 }
 // Global Hashtable -----------------------------
 __device__ void atomicAddValue(KeyValue* hashtable, uint32_t slot, Value value){
-    // hashtable[slot].KeyValue_s.value = 1111;
-    Value prevv = hashtable[slot].KeyValue_s.value;
-    Value writev = prevv + value;
-    while(atomicCAS(&hashtable[slot].KeyValue_s.value, prevv, writev)!=prevv){
-        prevv = hashtable[slot].KeyValue_s.value;
-        writev = prevv + value;
-    }
+    atomicAdd(&hashtable[slot].KeyValue_s.value, value);
+    // Value prevv = hashtable[slot].KeyValue_s.value;
+    // Value writev = prevv + value;
+    // while(atomicCAS(&hashtable[slot].KeyValue_s.value, prevv, writev)!=prevv){
+    //     prevv = hashtable[slot].KeyValue_s.value;
+    //     writev = prevv + value;
+    // }
     return;
 }
 
@@ -243,48 +245,23 @@ __device__ void atomicAddValue(KeyValue* hashtable, uint32_t slot, Value value){
 __device__  __inline__ void hashtable_update(KeyValue* hashtable, Key key, Value value)
 {
     uint32_t slot = hash(key);
-    // KeyValue pEmpty;
-    // pEmpty.KeyValue_s.key = kEmpty;
-    // pEmpty.KeyValue_s.value = vEmpty;
-    // while (true)
-    // {
-    //     KeyValue current = hashtable[slot];
-    //     if(current.KeyValue_s.key==kEmpty){
-    //         KeyValue insert;
-    //         insert.KeyValue_s.key = key;
-    //         insert.KeyValue_s.value = value;
-    //         current.KeyValue_i = atomicCAS(&hashtable[slot].KeyValue_i, pEmpty.KeyValue_i, insert.KeyValue_i);
-    //     }
-        
-    //     if (current.KeyValue_s.key == kEmpty)
-    //     {
-    //         return; 
-    //     } else if(current.KeyValue_s.key == key) {
-    //         // Some other thread with the same key inserted,
-    //         // since we share the same key, I need to atomically add mine.
-    //         atomicAddValue(hashtable, slot, value);
-    //         return;
-    //     }
-
-    //     slot = (slot + 1) & (kHashTableCapacity-1);
-    // }
-
+    KeyValue pEmpty;
+    pEmpty.KeyValue_s.key = kEmpty;
+    pEmpty.KeyValue_s.value = vEmpty;
     while (true)
     {
-        Key prev = atomicCAS(&hashtable[slot].KeyValue_s.key, kEmpty, key);
-        if (prev == kEmpty)
+        KeyValue current = hashtable[slot];
+        if(current.KeyValue_s.key==kEmpty){
+            KeyValue insert;
+            insert.KeyValue_s.key = key;
+            insert.KeyValue_s.value = value;
+            current.KeyValue_i = atomicCAS(&hashtable[slot].KeyValue_i, pEmpty.KeyValue_i, insert.KeyValue_i);
+        }
+        
+        if (current.KeyValue_s.key == kEmpty)
         {
-            Value prevv = atomicCAS(&hashtable[slot].KeyValue_s.value, vEmpty, value);
-            // No thread gets before me
-            if(prevv == vEmpty){
-                return;
-            }
-            // Some thread with the same key gets before me and wrote its value
-            // I need to add my value to its value
-            atomicAddValue(hashtable, slot, value);
-            // Function only returns if it succesfully added my value, safe to return.
             return; 
-        } else if(prev == key) {
+        } else if(current.KeyValue_s.key == key) {
             // Some other thread with the same key inserted,
             // since we share the same key, I need to atomically add mine.
             atomicAddValue(hashtable, slot, value);
@@ -293,6 +270,31 @@ __device__  __inline__ void hashtable_update(KeyValue* hashtable, Key key, Value
 
         slot = (slot + 1) & (kHashTableCapacity-1);
     }
+
+    // while (true)
+    // {
+    //     Key prev = atomicCAS(&hashtable[slot].KeyValue_s.key, kEmpty, key);
+    //     if (prev == kEmpty)
+    //     {
+    //         Value prevv = atomicCAS(&hashtable[slot].KeyValue_s.value, vEmpty, value);
+    //         // No thread gets before me
+    //         if(prevv == vEmpty){
+    //             return;
+    //         }
+    //         // Some thread with the same key gets before me and wrote its value
+    //         // I need to add my value to its value
+    //         atomicAddValue(hashtable, slot, value);
+    //         // Function only returns if it succesfully added my value, safe to return.
+    //         return; 
+    //     } else if(prev == key) {
+    //         // Some other thread with the same key inserted,
+    //         // since we share the same key, I need to atomically add mine.
+    //         atomicAddValue(hashtable, slot, value);
+    //         return;
+    //     }
+
+    //     slot = (slot + 1) & (kHashTableCapacity-1);
+    // }
     
 }
 

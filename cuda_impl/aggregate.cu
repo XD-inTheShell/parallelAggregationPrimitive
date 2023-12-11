@@ -71,10 +71,11 @@ int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std:
         cudaMemcpy(device_values, values.data()+i, sizeof(Value) * copySize, cudaMemcpyHostToDevice);
         checkCuda();
 
+        cudaThreadSynchronize();
         double startTime = CycleTimer::currentSeconds();
         simplehashAggregateKernel<<<grid_size, block_size>>>(devic_hashtable,
                 device_keys, device_values,
-                numEntries, i,  PERTHREADSTEP, launch_thread);
+                numEntries, i,  computestep, launch_thread);
         cudaThreadSynchronize();
         double endTime = CycleTimer::currentSeconds();    
         double overallDuration = endTime - startTime;
@@ -130,11 +131,12 @@ int localHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::
         checkCuda();
         cudaMemcpy(device_values, values.data()+i, sizeof(Value) * copySize, cudaMemcpyHostToDevice);
         checkCuda();
-
+        
+        cudaThreadSynchronize();
         double startTime = CycleTimer::currentSeconds();
         localhashAggregate<<<grid_size, block_size>>>(devic_hashtable,
                 device_keys, device_values,
-                numEntries, i,  PERTHREADSTEP, launch_thread);
+                numEntries, i,  computestep, launch_thread);
         cudaThreadSynchronize();
         double endTime = CycleTimer::currentSeconds();    
         double overallDuration = endTime - startTime;
@@ -178,10 +180,11 @@ int localHashnSharedAggregate(std::vector<Key> &keys, std::vector<Value> &values
         cudaMemcpy(device_values, values.data()+i, sizeof(Value) * copySize, cudaMemcpyHostToDevice);
         checkCuda();
 
+        cudaThreadSynchronize();
         double startTime = CycleTimer::currentSeconds();
         localhashSharedAggregate<<<grid_size, block_size>>>(devic_hashtable,
                 device_keys, device_values,
-                numEntries, i,  PERTHREADSTEP, launch_thread);
+                numEntries, i,  computestep, launch_thread);
         cudaThreadSynchronize();
         double endTime = CycleTimer::currentSeconds();    
         double overallDuration = endTime - startTime;
@@ -262,10 +265,12 @@ int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::u
         checkCuda();
         cudaMemcpy(device_values, values.data()+i, sizeof(Value) * copySize, cudaMemcpyHostToDevice);
         checkCuda();
+
+        cudaThreadSynchronize();
         double startTime = CycleTimer::currentSeconds();
         cucohashAggregateKernel<<<grid_size, block_size>>>(device_insert_view,
                 device_keys, device_values,
-                numEntries, i,  PERTHREADSTEP, launch_thread);
+                numEntries, i,  computestep, launch_thread);
         cudaThreadSynchronize();
         double endTime = CycleTimer::currentSeconds();    
         double overallDuration = endTime - startTime;
@@ -424,73 +429,37 @@ int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::u
 //   }
 // }
 
-// int test(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap)
-// {
+__global__ void emtpy_kernel(){
+    return;
+};
+int test()
+{   
+    cudaThreadSynchronize();
+    cudaThreadSynchronize();
+    double startTime = CycleTimer::currentSeconds();
+    emtpy_kernel<<<GRIDSIZE, BLOCKSIZE>>>();
+    cudaThreadSynchronize();
+    double endTime = CycleTimer::currentSeconds();    
+    double overallDuration = endTime - startTime;
+    printf("*** Empty Executed for: %.3f ms ***\n", 1000.f * overallDuration);
 
-//     // // Empty slots are represented by reserved "sentinel" values. These values should be selected such
-//     // // that they never occur in your input data.
-//     // Key constexpr empty_key_sentinel     = -1;
-//     // Value constexpr empty_value_sentinel = -1;
+    cudaThreadSynchronize();
+    cudaThreadSynchronize();
+     startTime = CycleTimer::currentSeconds();
+    emtpy_kernel<<<GRIDSIZE, BLOCKSIZE>>>();
+    cudaThreadSynchronize();
+     endTime = CycleTimer::currentSeconds();    
+     overallDuration = endTime - startTime;
+    printf("*** Empty Executed for: %.3f ms ***\n", 1000.f * overallDuration);
 
-//     // // Number of key/value pairs to be inserted
-//     // std::size_t constexpr num_keys = 50'000;
+    cudaThreadSynchronize();
+    cudaThreadSynchronize();
+     startTime = CycleTimer::currentSeconds();
+    emtpy_kernel<<<GRIDSIZE, BLOCKSIZE>>>();
+    cudaThreadSynchronize();
+     endTime = CycleTimer::currentSeconds();    
+     overallDuration = endTime - startTime;
+    printf("*** Empty Executed for: %.3f ms ***\n", 1000.f * overallDuration);
 
-//     // // Create a sequence of keys and values {{0,0}, {1,1}, ... {i,i}}
-//     // thrust::device_vector<Key> insert_keys(num_keys);
-//     // thrust::sequence(insert_keys.begin(), insert_keys.end(), 0);
-//     // thrust::device_vector<Value> insert_values(num_keys);
-//     // thrust::sequence(insert_values.begin(), insert_values.end(), 0);
-
-//     // // Compute capacity based on a 50% load factor
-//     // auto constexpr load_factor = 0.5;
-//     // std::size_t const capacity = std::ceil(num_keys / load_factor);
-
-//     // // Constructs a map with "capacity" slots using -1 and -1 as the empty key/value sentinels.
-//     // cuco::static_map<Key, Value> map{
-//     // capacity, cuco::empty_key{empty_key_sentinel}, cuco::empty_value{empty_value_sentinel}};
-
-//     // // Get a non-owning, mutable view of the map that allows inserts to pass by value into the kernel
-//     // auto device_insert_view = map.get_device_mutable_view();
-
-//     // // Predicate will only insert even keys
-//     // auto is_even = [] __device__(auto key) { return (key % 2) == 0; };
-
-//     // // Allocate storage for count of number of inserted keys
-//     // thrust::device_vector<int> num_inserted(1);
-
-//     // auto constexpr block_size = 256;
-//     // auto const grid_size      = (num_keys + block_size - 1) / block_size;
-//     // // filtered_insert<<<grid_size, block_size>>>(device_insert_view,
-//     // //                                             insert_keys.begin(),
-//     // //                                             insert_values.begin(),
-//     // //                                             num_keys,
-//     // //                                             is_even,
-//     // //                                             num_inserted.data().get());
-
-//     // std::cout << "Number of keys inserted: " << num_inserted[0] << std::endl;
-
-//     // // Get a non-owning view of the map that allows find operations to pass by value into the kernel
-//     // auto device_find_view = map.get_device_view();
-//     // Key * device_keys;
-//     // Value * device_values;
-//     // cudaMalloc((void **)&device_keys, sizeof(Key) * num_keys);
-
-//     // increment_values<<<grid_size, block_size>>>(device_insert_view, device_keys, num_keys);
-
-//     // // Retrieve contents of all the non-empty slots in the map
-//     // thrust::device_vector<Key> contained_keys(num_inserted[0]);
-//     // thrust::device_vector<Value> contained_values(num_inserted[0]);
-//     // map.retrieve_all(contained_keys.begin(), contained_values.begin());
-
-//     // auto tuple_iter =
-//     // thrust::make_zip_iterator(thrust::make_tuple(contained_keys.begin(), contained_values.begin()));
-//     // // Iterate over all slot contents and verify that `slot.key + 1 == slot.value` is always true.
-//     // auto result = thrust::all_of(
-//     // thrust::device, tuple_iter, tuple_iter + num_inserted[0], [] __device__(auto const& tuple) {
-//     //     return thrust::get<0>(tuple) + 1 == thrust::get<1>(tuple);
-//     // });
-
-//     // if (result) { std::cout << "Success! Target values are properly incremented.\n"; }
-
-//     return 0;
-// }
+    return 0;
+}
