@@ -14,11 +14,18 @@
 
 unsigned int computestep;
 
-int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
-int localHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
-int localHashnSharedAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap, int debug);
-int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
-int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap);
+double simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
+                            , std::map<std::string, std::map<unsigned int, double>> &perf);
+double localHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
+                            , std::map<std::string, std::map<unsigned int, double>> &perf);
+double localHashnSharedAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap, int debug
+                            , std::map<std::string, std::map<unsigned int, double>> &perf);
+double cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
+                            , std::map<std::string, std::map<unsigned int, double>> &perf);
+double localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
+                            , std::map<std::string, std::map<unsigned int, double>> &perf);
+int localnsharedHashcucoAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
+                            , std::map<std::string, std::map<unsigned int, double>> &perf);
 int test();
 int readFile(std::string fileName, 
                 std::vector<Key> &ukeys, std::vector<Value> &uvalues,
@@ -88,56 +95,74 @@ int writeFile(std::string fileName, std::unordered_map<Key, Value> &umap){
     //     std::cout << "error writing file \"" << fileName << "\"" << std::endl;
     return true;
 }
+
+void run(std::vector<Key> &keys, std::vector<Value> &values, std::map<std::string, std::map<unsigned int, double>> &perf){
+
+    std::unordered_map<Key, Value> shumap, loumap, lsumap, cuumap, lcumap, lscumap;
+
+    simpleHashAggregate(keys, values, shumap, perf);
+    writeFile("out/shout.txt", shumap);
+
+    localHashAggregate(keys, values, loumap, perf);
+    writeFile("out/loout.txt", loumap);
+
+    localHashnSharedAggregate(keys, values, lsumap,0, perf);
+    writeFile("out/lsout.txt", lsumap);
+
+    cucoHashAggregate(keys, values, cuumap, perf);
+    writeFile("out/cuout.txt", cuumap);
+
+    localncucoHashAggregate(keys, values, lcumap, perf);
+    writeFile("out/lcout.txt", lcumap);
+
+    localnsharedHashcucoAggregate(keys, values, lscumap, perf);
+    writeFile("out/lscout.txt", lscumap);
+    
+}
 int main(int argc, char** argv)
 {
     printf("HI\n");
 
     std::vector<Key> ukeys, okeys;
     std::vector<Value> uvalues, ovalues;
-    std::unordered_map<Key, Value> shumap, loumap, lsumap, cuumap, lcumap;
+    
+
+    std::map<std::string, std::map<unsigned int, double>> perf;
     readFile("../testcases/inputs/in.txt", ukeys, uvalues, okeys, ovalues);
 
-    
     computestep = ukeys.size()/(GRIDSIZE*BLOCKSIZE)+1;
     printf("step is %u\n", computestep);
     printf("----------------------Unsorted Keys----------------------- \n");
-    simpleHashAggregate(ukeys, uvalues, shumap);
-    // writeFile("out/shout.txt", shumap);
-
-    localHashAggregate(ukeys, uvalues, loumap);
-    // writeFile("out/loout.txt", loumap);
-
-    localHashnSharedAggregate(ukeys, uvalues, lsumap,0);
-    // writeFile("out/lsout.txt", lsumap);
-
-    cucoHashAggregate(ukeys, uvalues, cuumap);
-    // test(ukeys, uvalues, umap);
-    // writeFile("out/cuout.txt", cuumap);
-
-    localncucoHashAggregate(ukeys, uvalues, lcumap);
-    // writeFile("out/lcout.txt", lcumap);
+    run(ukeys, uvalues, perf);
 
     printf("----------------------Sorted Keys----------------------- \n");
-    shumap.clear(); 
-    loumap.clear(); 
-    lsumap.clear(); 
-    cuumap.clear(); 
-    lcumap.clear();
-    simpleHashAggregate(okeys, ovalues, shumap);
-    writeFile("out/shout.txt", shumap);
+    run(okeys, ovalues, perf);
+    // shumap.clear(); 
+    // loumap.clear(); 
+    // lsumap.clear(); 
+    // cuumap.clear(); 
+    // lcumap.clear();
+    // simpleHashAggregate(okeys, ovalues, shumap, perf);
+    // writeFile("out/shout.txt", shumap);
 
-    localHashAggregate(okeys, ovalues, loumap);
-    writeFile("out/loout.txt", loumap);
+    // localHashAggregate(okeys, ovalues, loumap, perf);
+    // writeFile("out/loout.txt", loumap);
 
-    localHashnSharedAggregate(okeys, ovalues, lsumap,1);
-    writeFile("out/lsout.txt", lsumap);
+    // localHashnSharedAggregate(okeys, ovalues, lsumap,1, perf);
+    // writeFile("out/lsout.txt", lsumap);
 
-    cucoHashAggregate(okeys, ovalues, cuumap);
+    // cucoHashAggregate(okeys, ovalues, cuumap, perf);
 
-    writeFile("out/cuout.txt", cuumap);
+    // writeFile("out/cuout.txt", cuumap);
 
-    localncucoHashAggregate(okeys, ovalues, lcumap);
-    writeFile("out/lcout.txt", lcumap);
+    // localncucoHashAggregate(okeys, ovalues, lcumap, perf);
+    // writeFile("out/lcout.txt", lcumap);
+
+    for(auto impl:perf){
+        for(auto size:impl.second){
+            printf("%s: %u, %f\n", impl.first.c_str(), size.first, size.second);
+        }
+    }
     
     return 0;
 }

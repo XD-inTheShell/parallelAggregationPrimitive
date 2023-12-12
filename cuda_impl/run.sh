@@ -15,3 +15,5 @@ echo "cuout"
 diff out/cuout.txt ../seq_impl/out.txt 
 echo "lcout"
 diff out/lcout.txt ../seq_impl/out.txt 
+echo "lscout"
+diff out/lscout.txt ../seq_impl/out.txt 

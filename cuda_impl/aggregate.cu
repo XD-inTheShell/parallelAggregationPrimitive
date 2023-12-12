@@ -40,14 +40,15 @@ __global__ void localhashCucoaggregate(Map map_view,
                             long unsigned int cap, long unsigned int base, 
                             unsigned int step, unsigned int const launch_thread);
 
-int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap){
+int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
+                            , std::map<std::string, std::map<unsigned int, double>> &perf){
     long unsigned int numEntries = keys.size();
 
     auto constexpr block_size   = BLOCKSIZE;
     auto const grid_size        = GRIDSIZE;
     unsigned int const launch_thread = block_size * grid_size;
     auto const launch_size      = launch_thread * PERTHREADSTEP;
-
+ 
     // Malloc
     Key * device_keys;
     Value * device_values;
@@ -60,7 +61,7 @@ int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std:
     checkCuda();
 
     long unsigned int next;
-
+    double overallDuration;
     for (long unsigned int i=0; i<numEntries; i+=launch_size){
         
         unsigned int copySize = std::min((numEntries-i), (long unsigned int)launch_size);
@@ -78,10 +79,13 @@ int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std:
                 numEntries, i,  computestep, launch_thread);
         cudaThreadSynchronize();
         double endTime = CycleTimer::currentSeconds();    
-        double overallDuration = endTime - startTime;
+        overallDuration = endTime - startTime;
         printf("Simple Hash Executed for: %.3f ms\n", 1000.f * overallDuration);
+
         checkCuda();
     }
+
+    perf["simplehash"][numEntries] = 1000.f * overallDuration;
 
     //     unsigned int copySize = 3;
     //     cudaMemcpy(device_keys, keys.data(), sizeof(Key) * copySize, cudaMemcpyHostToDevice);
@@ -96,12 +100,13 @@ int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std:
     // checkCuda();
 
     export_hashtable(devic_hashtable, host_hashtable, umap);
-
+ 
     return 0;
 }
 
 // Only support small key size that fits on the memory
-int localHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap){
+int localHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
+                            , std::map<std::string, std::map<unsigned int, double>> &perf){
     long unsigned int numEntries = keys.size();
 
     auto constexpr block_size   = BLOCKSIZE;
@@ -121,6 +126,7 @@ int localHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::
     checkCuda();
 
     long unsigned int next;
+    double overallDuration;
 
     for (long unsigned int i=0; i<numEntries; i+=launch_size){
         
@@ -139,17 +145,20 @@ int localHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::
                 numEntries, i,  computestep, launch_thread);
         cudaThreadSynchronize();
         double endTime = CycleTimer::currentSeconds();    
-        double overallDuration = endTime - startTime;
+         overallDuration = endTime - startTime;
         printf("Local Hash Executed for: %.3f ms\n", 1000.f * overallDuration);
         checkCuda();
     }
 
     export_hashtable(devic_hashtable, host_hashtable, umap);
 
+    perf["localhash"][numEntries] = 1000.f * overallDuration;
+
     return 0;
 }
 
-int localHashnSharedAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap, int debug){
+int localHashnSharedAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap, int debug
+                            , std::map<std::string, std::map<unsigned int, double>> &perf){
     long unsigned int numEntries = keys.size();
     
     auto constexpr block_size   = BLOCKSIZE;
@@ -170,6 +179,8 @@ int localHashnSharedAggregate(std::vector<Key> &keys, std::vector<Value> &values
 
     long unsigned int next;
 
+    double overallDuration;
+
     for (long unsigned int i=0; i<numEntries; i+=launch_size){
         
         unsigned int copySize = std::min((numEntries-i), (long unsigned int)launch_size);
@@ -187,12 +198,14 @@ int localHashnSharedAggregate(std::vector<Key> &keys, std::vector<Value> &values
                 numEntries, i,  computestep, launch_thread);
         cudaThreadSynchronize();
         double endTime = CycleTimer::currentSeconds();    
-        double overallDuration = endTime - startTime;
+         overallDuration = endTime - startTime;
         printf("Local Hash & Shared Hash Executed for: %.3f ms\n", 1000.f * overallDuration);
         checkCuda();
     }
 
     export_hashtable(devic_hashtable, host_hashtable, umap);
+
+    perf["localhashnshared"][numEntries] = 1000.f * overallDuration;
    
     return 0;
 }
@@ -227,7 +240,8 @@ __global__ void cucohashAggregateKernel(Map map_view,
     }
 }
 
-int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap){
+int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
+                            , std::map<std::string, std::map<unsigned int, double>> &perf){
     long unsigned int numEntries = keys.size();
 
     auto constexpr block_size   = BLOCKSIZE;
@@ -256,6 +270,8 @@ int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::u
         capacity, cuco::empty_key{empty_key_sentinel}, cuco::empty_value{empty_value_sentinel}};
     auto device_insert_view = map.get_device_mutable_view();
 
+    double overallDuration;
+
     for (long unsigned int i=0; i<numEntries; i+=launch_size){
         
         unsigned int copySize = std::min((numEntries-i), (long unsigned int)launch_size);
@@ -273,7 +289,7 @@ int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::u
                 numEntries, i,  computestep, launch_thread);
         cudaThreadSynchronize();
         double endTime = CycleTimer::currentSeconds();    
-        double overallDuration = endTime - startTime;
+         overallDuration = endTime - startTime;
         printf("Cuco Hash Executed for: %.3f ms\n", 1000.f * overallDuration);
 
         checkCuda();
@@ -298,6 +314,9 @@ int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::u
         // printf("key %u value %u\n", key, val);
         umap[key] = val;
     }
+
+    perf["cucohash"][numEntries] = 1000.f * overallDuration;
+
     return 0;
 }
 
