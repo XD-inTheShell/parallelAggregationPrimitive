@@ -16,7 +16,7 @@
 #include <sycl/atomic.hpp>
 
 #define kHashTableCapacity 128//16384
-#define N 1000000
+#define N 10000000
 #define KEY_EMPTY 0xFFFFFFFF
 
 
@@ -260,8 +260,10 @@ int main(){
     std::vector<uint32_t> vec_keys;
     std::vector<uint32_t> vec_values;
     readFile("../testcases/inputs/in.txt", vec_keys, vec_values, N);
-    uint32_t keys[N];
-    uint32_t values[N];
+    // uint32_t keys[N];
+    // uint32_t values[N];
+    uint32_t *keys = (uint32_t *)std::malloc(sizeof(uint32_t)*N);
+    uint32_t *values = (uint32_t *)std::malloc(sizeof(uint32_t)*N);;
     std::copy(vec_keys.begin(), vec_keys.end(), keys);
     std::copy(vec_values.begin(), vec_values.end(), values);
 
@@ -275,10 +277,24 @@ int main(){
     hashtable = sycl::malloc_device<kv>(kHashTableCapacity, q);
     hashtable_host = sycl::malloc_host<kv>(kHashTableCapacity, q);
 
-    //q.memset(hashtable, 0xFF, kHashTableCapacity*sizeof(kv));
-    q.memcpy(dev_keys, &keys, sizeof(uint32_t)*N).wait();
-    q.memcpy(dev_vals, &values, sizeof(uint32_t)*N).wait();
+    buffer<uint32_t> buf_keys(keys, N);
+    buffer<uint32_t> buf_values(values, N);
 
+    
+    q.submit([&](handler& h){
+        accessor acc_keys(buf_keys, h, read_only);
+        accessor acc_values(buf_values, h, read_only);
+        h.parallel_for(N, [=](item<1> j){
+            dev_keys[j] = acc_keys[j];
+            dev_vals[j] = acc_values[j];
+        });
+
+    });
+    
+    //q.memcpy(hashtable_host, hashtable, sizeof(kv)*kHashTableCapacity).wait();
+    //q.memcpy(dev_keys, keys, sizeof(uint32_t)*N).wait();
+    q.wait();
+    auto t0 = std::chrono::steady_clock::now();
     q.submit([&](handler& h){
         h.parallel_for(kHashTableCapacity, [=](item<1> i){
             hashtable[i].key = KEY_EMPTY;
@@ -286,9 +302,7 @@ int main(){
         });
     });
     
-    // q.memcpy(&values, dev_vals, values.size()*sizeof(uint32_t)).wait();
     q.wait();
-    auto t0 = std::chrono::steady_clock::now();
     q.submit([&](handler& h){
         //stream os(1024, 128, h);
         h.parallel_for(N, [=](item<1> i){
@@ -354,7 +368,7 @@ int main(){
     });
     const int BLOCK_X = 64;
     const int BLOCK_Y = 16;
-    const int GRID_X = 64;
+    const int GRID_X = 128;
     const int GRID_Y = 1;
     const int TOTAL_THREADS = BLOCK_X * BLOCK_Y * GRID_X * GRID_Y;
     const int ENTRIES_PER_THREAD = (N / TOTAL_THREADS) + 1;
@@ -373,10 +387,11 @@ int main(){
             kv *table = hash_acc.get_pointer();
             uint32_t key;
             uint32_t value;
-            if(my_thread_id < kHashTableCapacity){
+            for(int i = my_thread_id; i < kHashTableCapacity; i += BLOCK_X * BLOCK_Y){
                 table[my_thread_id].key = KEY_EMPTY;
                 table[my_thread_id].value = 0;
             }
+            sycl::group_barrier(it.get_group());
             int idx_start = my_block_id * BLOCK_X * BLOCK_Y;
             for(int i = idx_start; i < N; i += TOTAL_THREADS){
                 if(i+my_thread_id >= N){
@@ -424,7 +439,7 @@ int main(){
             
         });
 
-    }).wait();
+    });
     t1 = std::chrono::steady_clock::now();
     q.wait();
     
