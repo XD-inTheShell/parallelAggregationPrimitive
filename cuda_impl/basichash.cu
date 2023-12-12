@@ -61,10 +61,19 @@ __global__ void localhashAggregate(KeyValue* globalHashtable,
     }
 
     // Write to global hash
-    for(int i=0; i<KEYSIZE; i++){
+    // for(int i=0; i<KEYSIZE; i++){
+    //     Key key = privateHashtable[i].KeyValue_s.key;
+    //     if(key!=kEmpty){
+    //         Value value = privateHashtable[i].KeyValue_s.value;
+    //         hashtable_update(globalHashtable, key, value);
+    //     }
+    // }
+
+    for(int j=0; j<KEYSIZE; j++){
+        int i = (index + j) % KEYSIZE;
         Key key = privateHashtable[i].KeyValue_s.key;
+        Value value = privateHashtable[i].KeyValue_s.value;
         if(key!=kEmpty){
-            Value value = privateHashtable[i].KeyValue_s.value;
             hashtable_update(globalHashtable, key, value);
         }
     }
@@ -96,15 +105,13 @@ __global__ void localhashSharedAggregate(KeyValue* globalHashtable,
         }
     }
 
-    
     for(int i=0; i<KEYSIZE; i++){
+    // for(int j=0; j<KEYSIZE; j++){
+        // int i = (index + j) % KEYSIZE;
         Key key = privateHashtable[i].KeyValue_s.key;
         if(key!=kEmpty){
             Value value = privateHashtable[i].KeyValue_s.value;
-            // if(value != 0 ){
-                hashtable_update(sharedHashtable, key, value);
-            // }
-            
+                hashtable_update(sharedHashtable, key, value);   
         }
     }
 
@@ -112,6 +119,47 @@ __global__ void localhashSharedAggregate(KeyValue* globalHashtable,
     __syncthreads();
     if(threadIdx.x==0){
         for(int i=0; i<KEYSIZE; i++){
+        // for(int j=0; j<KEYSIZE; j++){
+            // int i = (index + j) % KEYSIZE;
+            Key key = sharedHashtable[i].KeyValue_s.key;
+            if(key!=kEmpty){
+                Value value = sharedHashtable[i].KeyValue_s.value;
+                hashtable_update(globalHashtable, key, value);
+            }
+        }
+    }
+    
+}
+
+__global__ void SharedAggregate(KeyValue* globalHashtable,
+                            Key * device_keys, Value * device_values,
+                            long unsigned int cap, long unsigned int base, 
+                            unsigned int step, unsigned int const launch_thread){
+
+    __shared__ KeyValue sharedHashtable[KEYSIZE];
+
+    for(int i=0; i<KEYSIZE; i++){
+        if(threadIdx.x==0){
+            sharedHashtable[i].KeyValue_s.key = kEmpty;
+            sharedHashtable[i].KeyValue_s.value = vEmpty;
+        }
+    }
+
+    long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+    for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
+        if((i+base) < cap){
+            Key key     = device_keys[i];
+            Value value = device_values[i];
+            hashtable_update(sharedHashtable, key, value);
+        }
+    }
+
+    // Write to global hash
+    __syncthreads();
+    if(threadIdx.x==0){
+        for(int i=0; i<KEYSIZE; i++){
+        // for(int j=0; j<KEYSIZE; j++){
+            // int i = (index + j) % KEYSIZE;
             Key key = sharedHashtable[i].KeyValue_s.key;
             if(key!=kEmpty){
                 Value value = sharedHashtable[i].KeyValue_s.value;
@@ -211,6 +259,62 @@ __global__ void localnsharedhashCucoaggregate(Map  map_view,
         }
     }
 }
+
+template <typename Map>
+__global__ void sharedhashCucoaggregate(Map  map_view,
+                            Key * device_keys, Value * device_values,
+                            long unsigned int cap, long unsigned int base, 
+                            unsigned int step, unsigned int const launch_thread){
+
+    __shared__ KeyValue sharedHashtable[KEYSIZE];
+    KeyValue privateHashtable[KEYSIZE];
+    for(int i=0; i<KEYSIZE; i++){
+        privateHashtable[i].KeyValue_s.key = kEmpty;
+        privateHashtable[i].KeyValue_s.value = 0;
+        if(threadIdx.x==0){
+            sharedHashtable[i].KeyValue_s.key = kEmpty;
+            sharedHashtable[i].KeyValue_s.value = vEmpty;
+        }
+    }
+
+    long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+    for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
+        if((i+base) < cap){
+            Key key     = device_keys[i];
+            Value value = device_values[i];
+            localhashUpdate(privateHashtable, key, value);
+        }
+    }
+
+    
+    for(int i=0; i<KEYSIZE; i++){
+        Key key = privateHashtable[i].KeyValue_s.key;
+        if(key!=kEmpty){
+            Value value = privateHashtable[i].KeyValue_s.value;
+            // if(value != 0 ){
+                hashtable_update(sharedHashtable, key, value);
+            // }
+            
+        }
+    }
+
+    // Write to global hash
+    __syncthreads();
+
+    // Write to global hash
+    for(int i=0; i<KEYSIZE; i++){
+        Key key = privateHashtable[i].KeyValue_s.key;
+        if(key!=kEmpty){
+            Value value = privateHashtable[i].KeyValue_s.value;
+            auto [slot, is_new_key] = map_view.insert_and_find({key, value});
+            if (!is_new_key) {
+                 // key is already in the map -> increment count
+                slot->second.fetch_add(value, cuda::memory_order_relaxed);
+            }
+        }
+    }
+}
+
 int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
                             , std::map<std::string, std::map<unsigned int, double>> &perf){
     long unsigned int numEntries = keys.size();
@@ -369,6 +473,85 @@ int localnsharedHashcucoAggregate(std::vector<Key> &keys, std::vector<Value> &va
     return 0;
 }
 
+int sharedHashcucoAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
+                            , std::map<std::string, std::map<unsigned int, double>> &perf){
+    long unsigned int numEntries = keys.size();
+
+    auto constexpr block_size   = BLOCKSIZE;
+    auto const grid_size        = GRIDSIZE;
+    unsigned int const launch_thread = block_size * grid_size;
+    auto const launch_size      = launch_thread * PERTHREADSTEP;
+
+    // Malloc
+    Key * device_keys;
+    // thrust::device_vector<Key> device_keys(numEntries);
+    // thrust::copy(keys.begin(), keys.end(), device_keys.begin());
+    Value * device_values;
+    // thrust::device_vector<Value> device_values(numEntries);
+    // thrust::copy(values.begin(), values.end(), device_values.begin());
+
+    cudaMalloc((void **)&device_keys, sizeof(Key) * launch_size);
+    checkCuda();
+    cudaMalloc((void **)&device_values, sizeof(Value) * launch_size);
+    checkCuda();
+
+    std::size_t const capacity = KEYSIZE;
+    using Count = Value;
+    Key constexpr empty_key_sentinel     = static_cast<Key>(kEmpty);
+    Count constexpr empty_value_sentinel = static_cast<Count>(vEmpty);
+    cuco::static_map<Key, Count> map{
+        capacity, cuco::empty_key{empty_key_sentinel}, cuco::empty_value{empty_value_sentinel}};
+    auto device_insert_view = map.get_device_mutable_view();
+
+    double overallDuration;
+
+    for (long unsigned int i=0; i<numEntries; i+=launch_size){
+        
+        unsigned int copySize = std::min((numEntries-i), (long unsigned int)launch_size);
+        
+        printf("start from %ld, compute size %d\n", i, copySize);
+        cudaMemcpy(device_keys, keys.data()+i, sizeof(Key) * copySize, cudaMemcpyHostToDevice);
+        checkCuda();
+        cudaMemcpy(device_values, values.data()+i, sizeof(Value) * copySize, cudaMemcpyHostToDevice);
+        checkCuda();
+
+        cudaThreadSynchronize();
+        double startTime = CycleTimer::currentSeconds();
+        sharedhashCucoaggregate<<<grid_size, block_size>>>(device_insert_view,
+                device_keys, device_values,
+                numEntries, i,  computestep, launch_thread);
+        cudaThreadSynchronize();
+        double endTime = CycleTimer::currentSeconds();    
+         overallDuration = endTime - startTime;
+        printf("Shared Hash and Cuco Aggregate Executed for: %.3f ms\n", 1000.f * overallDuration);
+
+        checkCuda();
+    }
+    // unsigned int copySize = numEntries;
+    // cudaMemcpy(device_keys, keys.data(), sizeof(Key) * copySize, cudaMemcpyHostToDevice);
+    // checkCuda();
+    // cudaMemcpy(device_values, values.data(), sizeof(Value) * copySize, cudaMemcpyHostToDevice);
+    // checkCuda();
+    // cucohashAggregateKernel<<<grid_size, block_size>>>(device_insert_view,
+    //             device_keys, device_values,
+    //             numEntries, 0,  PERTHREADSTEP, launch_thread);
+
+    thrust::device_vector<Key> contained_keys(KEYSIZE);
+    thrust::device_vector<Value> contained_values(KEYSIZE);
+    auto [keyenditr, valenditr] = map.retrieve_all(contained_keys.begin(), contained_values.begin());
+    int num = std::distance(contained_keys.begin(), keyenditr);
+    for(int i=0; i<num; i++){
+        
+        Key key = contained_keys[i];
+        Value val = contained_values[i];
+        // printf("key %u value %u\n", key, val);
+        umap[key] = val;
+    }
+
+    perf["sharedCuco"][numEntries] = 1000.f * overallDuration;
+    return 0;
+}
+
 // Global Hashtable -----------------------------
 __device__ void atomicAddValue(KeyValue* hashtable, uint32_t slot, Value value){
     atomicAdd(&hashtable[slot].KeyValue_s.value, value);
@@ -474,12 +657,13 @@ KeyValue* create_hashtable()
     // Allocate memory
     KeyValue* hashtable;
     cudaMalloc(&hashtable, sizeof(KeyValue) * kHashTableCapacity);
-
+    checkCuda();
     // Initialize hash table to empty
     // Since we have a specific pattern we want to set, use a kernel to set it.
     const int threadsPerBlock = 512;
     const int blocks = (kHashTableCapacity + threadsPerBlock - 1) / threadsPerBlock;
     hashtable_empty<<<blocks, threadsPerBlock>>>(hashtable);
+    checkCuda();
     // static_assert(kEmpty == 0xffffffff, "memset expected kEmpty=0xffffffff");
     // cudaMemset(hashtable, 0xff, sizeof(KeyValue) * kHashTableCapacity);
 

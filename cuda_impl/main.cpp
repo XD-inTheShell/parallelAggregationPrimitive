@@ -26,6 +26,11 @@ double localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &value
                             , std::map<std::string, std::map<unsigned int, double>> &perf);
 int localnsharedHashcucoAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
                             , std::map<std::string, std::map<unsigned int, double>> &perf);
+int sharedHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
+                            , std::map<std::string, std::map<unsigned int, double>> &perf);
+int sharedHashcucoAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
+                            , std::map<std::string, std::map<unsigned int, double>> &perf);
+
 int test();
 int readFile(std::string fileName, 
                 std::vector<Key> &ukeys, std::vector<Value> &uvalues,
@@ -98,26 +103,31 @@ int writeFile(std::string fileName, std::unordered_map<Key, Value> &umap){
 
 void run(std::vector<Key> &keys, std::vector<Value> &values, std::map<std::string, std::map<unsigned int, double>> &perf){
 
-    std::unordered_map<Key, Value> shumap, loumap, lsumap, cuumap, lcumap, lscumap;
+    std::unordered_map<Key, Value> shumap, loumap, lsumap, sumap, cuumap, lcumap, lscumap, scumap;
 
-    simpleHashAggregate(keys, values, shumap, perf);
-    writeFile("out/shout.txt", shumap);
+    // simpleHashAggregate(keys, values, shumap, perf);
+    // writeFile("out/shout.txt", shumap);
 
-    localHashAggregate(keys, values, loumap, perf);
-    writeFile("out/loout.txt", loumap);
+    // localHashAggregate(keys, values, loumap, perf);
+    // writeFile("out/loout.txt", loumap);
 
-    localHashnSharedAggregate(keys, values, lsumap,0, perf);
-    writeFile("out/lsout.txt", lsumap);
+    // localHashnSharedAggregate(keys, values, lsumap,0, perf);
+    // writeFile("out/lsout.txt", lsumap);
 
-    cucoHashAggregate(keys, values, cuumap, perf);
-    writeFile("out/cuout.txt", cuumap);
+    sharedHashAggregate(keys, values, sumap, perf);
+    writeFile("out/sout.txt", sumap);
 
-    localncucoHashAggregate(keys, values, lcumap, perf);
-    writeFile("out/lcout.txt", lcumap);
+    // cucoHashAggregate(keys, values, cuumap, perf);
+    // writeFile("out/cuout.txt", cuumap);
 
-    localnsharedHashcucoAggregate(keys, values, lscumap, perf);
-    writeFile("out/lscout.txt", lscumap);
+    // localncucoHashAggregate(keys, values, lcumap, perf);
+    // writeFile("out/lcout.txt", lcumap);
+
+    // localnsharedHashcucoAggregate(keys, values, lscumap, perf);
+    // writeFile("out/lscout.txt", lscumap);
     
+    // sharedHashcucoAggregate(keys, values, scumap, perf);
+    // writeFile("out/scout.txt", scumap);
 }
 int main(int argc, char** argv)
 {
@@ -158,9 +168,11 @@ int main(int argc, char** argv)
     // localncucoHashAggregate(okeys, ovalues, lcumap, perf);
     // writeFile("out/lcout.txt", lcumap);
 
+    FILE * pFile;
+    pFile = fopen ("perf.txt","w");
     for(auto impl:perf){
         for(auto size:impl.second){
-            printf("%s: %u, %f\n", impl.first.c_str(), size.first, size.second);
+            fprintf(pFile, "%s: %u, %f\n", impl.first.c_str(), size.first, size.second);
         }
     }
     

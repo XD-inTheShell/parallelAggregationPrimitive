@@ -44,3 +44,7 @@ __global__ void localhashSharedAggregate(KeyValue* globalHashtable,
                             Key * device_keys, Value * device_values,
                             long unsigned int cap, long unsigned int base, 
                             unsigned int step, unsigned int const launch_thread);
+__global__ void SharedAggregate(KeyValue* globalHashtable,
+                            Key * device_keys, Value * device_values,
+                            long unsigned int cap, long unsigned int base, 
+                            unsigned int step, unsigned int const launch_thread);

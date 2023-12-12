@@ -210,6 +210,59 @@ int localHashnSharedAggregate(std::vector<Key> &keys, std::vector<Value> &values
     return 0;
 }
 
+int sharedHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
+                            , std::map<std::string, std::map<unsigned int, double>> &perf){
+    long unsigned int numEntries = keys.size();
+    
+    auto constexpr block_size   = BLOCKSIZE;
+    auto const grid_size        = GRIDSIZE;
+    unsigned int const launch_thread = block_size * grid_size;
+    auto const launch_size      = launch_thread * PERTHREADSTEP;
+
+    // Malloc
+    Key * device_keys;
+    Value * device_values;
+    KeyValue* devic_hashtable = create_hashtable();
+    KeyValue host_hashtable[KEYSIZE];
+
+    cudaMalloc((void **)&device_keys, sizeof(Key) * launch_size);
+    checkCuda();
+    cudaMalloc((void **)&device_values, sizeof(Value) * launch_size);
+    checkCuda();
+
+    long unsigned int next;
+
+    double overallDuration;
+
+    for (long unsigned int i=0; i<numEntries; i+=launch_size){
+        
+        unsigned int copySize = std::min((numEntries-i), (long unsigned int)launch_size);
+        
+        printf("start from %ld, compute size %d\n", i, copySize);
+        cudaMemcpy(device_keys, keys.data()+i, sizeof(Key) * copySize, cudaMemcpyHostToDevice);
+        checkCuda();
+        cudaMemcpy(device_values, values.data()+i, sizeof(Value) * copySize, cudaMemcpyHostToDevice);
+        checkCuda();
+
+        cudaThreadSynchronize();
+        double startTime = CycleTimer::currentSeconds();
+        SharedAggregate<<<grid_size, block_size>>>(devic_hashtable,
+                device_keys, device_values,
+                numEntries, i,  computestep, launch_thread);
+        cudaThreadSynchronize();
+        double endTime = CycleTimer::currentSeconds();    
+         overallDuration = endTime - startTime;
+        printf("Shared Hash Executed for: %.3f ms\n", 1000.f * overallDuration);
+        checkCuda();
+    }
+
+    export_hashtable(devic_hashtable, host_hashtable, umap);
+
+    perf["shared hash"][numEntries] = 1000.f * overallDuration;
+   
+    return 0;
+}
+
 template <typename Map>
 __global__ void cucohashAggregateKernel(Map map_view,
                             Key * device_keys, Value * device_values,
