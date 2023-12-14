@@ -15,9 +15,13 @@
 #include <sycl/sycl.hpp>
 #include <sycl/atomic.hpp>
 
-#define kHashTableCapacity 128//16384
-#define N 10000000
+#define kHashTableCapacity 1024//16384
+#define N 10 * 1000000
 #define KEY_EMPTY 0xFFFFFFFF
+//#define KEYNUM 1
+//#define FACTOR N/KEYNUM
+//#define FILL_LEVEL 0.99
+#define SORTED 0
 
 
 struct kv
@@ -55,36 +59,6 @@ int readFile(std::string fileName, std::vector<uint32_t> &keys, std::vector<Valu
     return 0;
 }
 
-int writeFile(std::string fileName, std::vector<int> &keys, std::vector<Value> &values, std::unordered_map<int, Value> &umap){
-    std::map<int, Value> res(umap.begin(), umap.end());
-
-    fileName = "out.txt";
-    std::ofstream file(fileName);
-    if (!file) {
-        std::cout << "error writing file \"" << fileName << "\"" << std::endl;
-        return 0;
-    }
-    file << std::setprecision(9);
-    for (auto d : res) {
-        file << d.first << " " << d.second << std::endl;
-    }
-    file.close();
-    if (!file)
-        std::cout << "error writing file \"" << fileName << "\"" << std::endl;
-    // std::ofstream file(fileName);
-    // if (!file) {
-    //     std::cout << "error writing file \"" << fileName << "\"" << std::endl;
-    //     return 0;
-    // }
-    // file << std::setprecision(10);
-    // for (long unsigned int i=0; i<keys.size();i++) {
-    //     file << keys[i] << " " << values[i] << std::endl;
-    // }
-    // file.close();
-    // if (!file)
-    //     std::cout << "error writing file \"" << fileName << "\"" << std::endl;
-    return true;
-}
 
 static auto exception_handler = [](sycl::exception_list e_list) {
   for (std::exception_ptr const& e : e_list) {
@@ -242,7 +216,7 @@ uint32_t lookup(kv* hashtable, uint32_t key)
 
 
 int main(){
-    auto selector = default_selector_v;
+    ///auto selector = default_selector_v;
     // auto devices = sycl::device::get_devices(sycl::info::device_type::gpu);
     // for(auto &device : devices) {
     //     sycl::queue q(device);
@@ -250,23 +224,37 @@ int main(){
     //     auto prefer_group_sizes = device.get_info<sycl::info::device::preferred_work_group_size>();
     //     std::cout << prefer_group_sizes << "\n";
     // }
-    //auto selector = cpu_selector_v;
+    auto selector = cpu_selector_v;
 
     queue q(selector, exception_handler);
 
     std::cerr << "Running on device: " << q.get_device().get_info<info::device::name>() << std::endl;
 
-    std::cerr << "hi" << std::endl;
+    //std::cerr << "hi" << std::endl;
     std::vector<uint32_t> vec_keys;
     std::vector<uint32_t> vec_values;
-    readFile("../testcases/inputs/in.txt", vec_keys, vec_values, N);
+    //readFile("../testcases/inputs/in_sorted.txt", vec_keys, vec_values, N);
     // uint32_t keys[N];
     // uint32_t values[N];
-    uint32_t *keys = (uint32_t *)std::malloc(sizeof(uint32_t)*N);
-    uint32_t *values = (uint32_t *)std::malloc(sizeof(uint32_t)*N);;
-    std::copy(vec_keys.begin(), vec_keys.end(), keys);
-    std::copy(vec_values.begin(), vec_values.end(), values);
+    //uint32_t *keys = (uint32_t *)std::malloc(sizeof(uint32_t)*N);
+    //uint32_t *values = (uint32_t *)std::malloc(sizeof(uint32_t)*N);;
+    //std::copy(vec_keys.begin(), vec_keys.end(), keys);
+    //std::copy(vec_values.begin(), vec_values.end(), values);
+    float FILL_LEVELS[9] = {0.25,0.5,0.6,0.7,0.8,0.85,0.9,0.95,0.99};
+    // int INPUT_SIZES[6] = 
+    // {
 
+    //     //5 * 100,
+    //     5 * 1000,
+    //     5 * 10000,
+    //     5 * 100000,
+    //     5 * 1000000,
+    //     5 * 10000000,
+    //     5 * 100000000
+    // };
+    for(int k = 0; k < 9; k++){
+    //int N = INPUT_SIZES[k];
+    float FILL_LEVEL = FILL_LEVELS[k];
     uint32_t *dev_keys;
     uint32_t *dev_vals;
     kv *hashtable;
@@ -277,19 +265,29 @@ int main(){
     hashtable = sycl::malloc_device<kv>(kHashTableCapacity, q);
     hashtable_host = sycl::malloc_host<kv>(kHashTableCapacity, q);
 
-    buffer<uint32_t> buf_keys(keys, N);
-    buffer<uint32_t> buf_values(values, N);
-
-    
-    q.submit([&](handler& h){
-        accessor acc_keys(buf_keys, h, read_only);
-        accessor acc_values(buf_values, h, read_only);
-        h.parallel_for(N, [=](item<1> j){
-            dev_keys[j] = acc_keys[j];
-            dev_vals[j] = acc_values[j];
+    //buffer<uint32_t> buf_keys(keys, N);
+    //buffer<uint32_t> buf_values(values, N);
+    int KEYNUM = kHashTableCapacity * FILL_LEVEL;
+    std::cout << "\n\n\n"<< FILL_LEVEL << "  "<< KEYNUM << "\n";
+    int factor = (N / KEYNUM) + 1;
+    if(SORTED){
+        q.submit([&](handler& h){
+            h.parallel_for(N, [=](item<1> j){
+                dev_keys[j] = j / factor;
+                dev_vals[j] = 1;
+            });
         });
+    }
+    else{
+        q.submit([&](handler& h){
+            h.parallel_for(N, [=](item<1> j){
+                dev_keys[j] = j%KEYNUM;
+                dev_vals[j] = 1;
+            });
 
-    });
+        });
+    }
+    
     
     //q.memcpy(hashtable_host, hashtable, sizeof(kv)*kHashTableCapacity).wait();
     //q.memcpy(dev_keys, keys, sizeof(uint32_t)*N).wait();
@@ -326,15 +324,16 @@ int main(){
     }).wait();//.wait();
     auto t1 = std::chrono::steady_clock::now();
     q.wait();
-    q.memcpy(hashtable_host, hashtable, sizeof(kv)*kHashTableCapacity).wait();
+    //q.memcpy(hashtable_host, hashtable, sizeof(kv)*kHashTableCapacity).wait();
     auto t2 = std::chrono::steady_clock::now();
     std::chrono::duration<double> submission_time = t1 - t0;
     std::chrono::duration<double> total_time = t2 - t0;
     //std::chrono::duration<double> diff = t2-t1;
     q.memcpy(hashtable_host, hashtable, sizeof(kv)*kHashTableCapacity).wait();
     std::cout << "SIMPLE HASH\n";
-    std::cout << "submission time " << submission_time.count()*1000 << "ms" << "\n";
-    std::cout << "total time " << total_time.count()*1000 << "ms" << "\n";
+    // std::cout << "submission time " << submission_time.count()*1000 << " ms" << "\n";
+    // std::cout << "total time " << total_time.count()*1000 << " ms" << "\n";
+    std::cout << "throughput " << (N/total_time.count())/1e9 << " GPairs/s\n";
     //std::cout << "diff" << diff.count()*1000 << "ms\n";
 
     std::map<uint32_t, uint32_t> res;
@@ -344,7 +343,7 @@ int main(){
             res.insert({hashtable_host[i].key, hashtable_host[i].value});
         }
     }
-
+    
     std::string fileName = "out_simple.txt";
     std::ofstream file(fileName);
     if (!file) {
@@ -375,7 +374,7 @@ int main(){
     q.wait();
     t0 = std::chrono::steady_clock::now();
     q.submit([&](handler& h){
-        stream os(1024, 128, h);
+        //stream os(1024, 128, h);
         range<3> grid_dim(BLOCK_X*GRID_X,BLOCK_Y*GRID_Y,1);//get by get_global_range()
         range<3> block_dim(BLOCK_X,BLOCK_Y,1);// get_local_range()
         sycl::local_accessor<kv> hash_acc(sycl::range<1>((kHashTableCapacity)), h);
@@ -449,9 +448,10 @@ int main(){
     //diff = t2-t1;
     q.memcpy(hashtable_host, hashtable, sizeof(kv)*kHashTableCapacity).wait();
 
-    std::cout << "\nshared hashtable (all threads a block share one)\n";
-    std::cout << "submission time " << submission_time.count()*1000 << "ms" << "\n";
-    std::cout << "total time " << total_time.count()*1000 << "ms" << "\n";
+    std::cout << "shared hashtable (all threads a block share one)\n";
+    // std::cout << "submission time " << submission_time.count()*1000 << " ms" << "\n";
+    // std::cout << "total time " << total_time.count()*1000 << " ms" << "\n";
+    std::cout << "throughput " << (N/total_time.count())/1e9 << " GPairs/s\n";
     //std::cout << "diff" << diff.count()*1000 << "ms\n";
 
     
@@ -483,5 +483,6 @@ int main(){
     sycl::free(dev_keys, q);
     sycl::free(hashtable, q);
     sycl::free(hashtable_host, q);
+    }
     return 0;
 }

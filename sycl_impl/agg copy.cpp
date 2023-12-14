@@ -16,7 +16,7 @@
 #include <sycl/atomic.hpp>
 
 #define kHashTableCapacity 128//16384
-#define N 1000000
+#define N 10000000
 #define KEY_EMPTY 0xFFFFFFFF
 
 
@@ -158,6 +158,69 @@ void insert(kv* hashtable, uint32_t key, uint32_t value)
     }
 }
 
+void insert_nd(kv* hashtable, uint32_t key, uint32_t value)
+{
+    uint32_t slot = hash(key);
+
+    while (true)
+    {
+        auto atm = atomic_ref<uint32_t, 
+                    memory_order::relaxed,
+                    memory_scope::device,
+                    access::address_space::generic_space>(hashtable[slot].key);
+        uint32_t expected = KEY_EMPTY;
+        uint32_t desired = key;
+        //atm.fetch_add(1);
+        atm.compare_exchange_strong(expected, desired);
+        if (expected == KEY_EMPTY)
+        {   
+            //os << "insert of" << key << " "<< value<< "\n";
+            auto ref = atomic_ref<
+                uint32_t, 
+                memory_order::relaxed,
+                memory_scope::device,
+                access::address_space::generic_space>(hashtable[slot].value);
+            ref.fetch_add(value);
+            break;
+        }
+        else if(expected == key){
+            //os << "update of" << key << " "<< value<< "\n";
+            auto ref = atomic_ref<
+                uint32_t, 
+                memory_order::relaxed,
+                memory_scope::device,
+                access::address_space::generic_space>(hashtable[slot].value);
+            ref.fetch_add(value);
+            //os << "updated of" << key << " "<< hashtable[slot].value<< "\n";
+            break;
+        }
+        slot = (slot + 1) & (kHashTableCapacity-1);
+    }
+}
+
+void insert_non_atomic(kv* hashtable, uint32_t key, uint32_t value)
+{
+    uint32_t slot = hash(key);
+
+    while (true)
+    {
+        //uint32_t prev = atomicCAS(&hashtable[slot].key, kEmpty, key);
+        uint32_t prev = hashtable[slot].key;
+        if(prev == KEY_EMPTY){
+            hashtable[slot].key = key;
+            hashtable[slot].value = value;
+            break;
+        }
+        else if(prev == key){
+            //os << "update of" << key << " "<< value<< "\n";
+            hashtable[slot].value += value;
+            //os << "updated of" << key << " "<< hashtable[slot].value<< "\n";
+            break;
+        }
+        slot = (slot + 1) & (kHashTableCapacity-1);
+    }
+}
+
 uint32_t lookup(kv* hashtable, uint32_t key)
 {
         uint32_t slot = hash(key);
@@ -197,38 +260,57 @@ int main(){
     std::vector<uint32_t> vec_keys;
     std::vector<uint32_t> vec_values;
     readFile("../testcases/inputs/in.txt", vec_keys, vec_values, N);
-    uint32_t keys[N];
-    uint32_t values[N];
+    // uint32_t keys[N];
+    // uint32_t values[N];
+    uint32_t *keys = (uint32_t *)std::malloc(sizeof(uint32_t)*N);
+    uint32_t *values = (uint32_t *)std::malloc(sizeof(uint32_t)*N);;
     std::copy(vec_keys.begin(), vec_keys.end(), keys);
     std::copy(vec_values.begin(), vec_values.end(), values);
 
     uint32_t *dev_keys;
     uint32_t *dev_vals;
-    kv *hashtable;
+    kv hashtable[kHashTableCapacity];
     kv *hashtable_host;
 
     dev_keys = sycl::malloc_device<uint32_t>(N, q);
     dev_vals = sycl::malloc_device<uint32_t>(N, q);
-    hashtable = sycl::malloc_device<kv>(kHashTableCapacity, q);
+    //hashtable = sycl::malloc_device<kv>(kHashTableCapacity, q);
+    
     hashtable_host = sycl::malloc_host<kv>(kHashTableCapacity, q);
 
-    //q.memset(hashtable, 0xFF, kHashTableCapacity*sizeof(kv));
-    q.memcpy(dev_keys, &keys, sizeof(uint32_t)*N).wait();
-    q.memcpy(dev_vals, &values, sizeof(uint32_t)*N).wait();
-
+    buffer<uint32_t> buf_keys(keys, N);
+    buffer<uint32_t> buf_values(values, N);
+    auto t0 = std::chrono::steady_clock::now();
+    {
+    buffer<kv> buf_hashtable(hashtable, kHashTableCapacity);
     q.submit([&](handler& h){
+        accessor acc_keys(buf_keys, h, read_only);
+        accessor acc_values(buf_values, h, read_only);
+        h.parallel_for(N, [=](item<1> j){
+            dev_keys[j] = acc_keys[j];
+            dev_vals[j] = acc_values[j];
+        });
+
+    });
+    
+    //q.memcpy(hashtable_host, hashtable, sizeof(kv)*kHashTableCapacity).wait();
+    //q.memcpy(dev_keys, keys, sizeof(uint32_t)*N).wait();
+    q.wait();
+    t0 = std::chrono::steady_clock::now();
+    q.submit([&](handler& h){
+        accessor acc_hashtable(buf_hashtable, h, write_only);
         h.parallel_for(kHashTableCapacity, [=](item<1> i){
-            hashtable[i].key = KEY_EMPTY;
-            hashtable[i].value = 0;
+            acc_hashtable[i].key = KEY_EMPTY;
+            acc_hashtable[i].value = 0;
         });
     });
     
-    // q.memcpy(&values, dev_vals, values.size()*sizeof(uint32_t)).wait();
     q.wait();
-    auto t0 = std::chrono::steady_clock::now();
     q.submit([&](handler& h){
         //stream os(1024, 128, h);
+        accessor acc_hashtable(buf_hashtable, h, read_write);
         h.parallel_for(N, [=](item<1> i){
+                kv* hashtable = acc_hashtable.get_pointer();
                 uint32_t key = dev_keys[i];
                 uint32_t value = dev_vals[i];
                 uint32_t slot = lookup(hashtable, key);
@@ -247,23 +329,32 @@ int main(){
             //os << "done" << "\n";
         });
     }).wait();//.wait();
+    }
     auto t1 = std::chrono::steady_clock::now();
     q.wait();
-    q.memcpy(hashtable_host, hashtable, sizeof(kv)*kHashTableCapacity).wait();
+    //q.memcpy(hashtable_host, hashtable, sizeof(kv)*kHashTableCapacity).wait();
     auto t2 = std::chrono::steady_clock::now();
     std::chrono::duration<double> submission_time = t1 - t0;
     std::chrono::duration<double> total_time = t2 - t0;
-    std::chrono::duration<double> diff = t2-t1;
+    //std::chrono::duration<double> diff = t2-t1;
     std::cout << "SIMPLE HASH\n";
     std::cout << "submission time " << submission_time.count()*1000 << "ms" << "\n";
     std::cout << "total time " << total_time.count()*1000 << "ms" << "\n";
-    std::cout << "diff" << diff.count()*1000 << "ms\n";
+    //std::cout << "diff" << diff.count()*1000 << "ms\n";
+
+    // std::map<uint32_t, uint32_t> res;
+    // for(int i = 0; i < kHashTableCapacity; i++){
+    //     if(hashtable_host[i].key != KEY_EMPTY){
+    //         //std::cerr << hashtable_host[i].key << "  " << hashtable_host[i].value << "\n";
+    //         res.insert({hashtable_host[i].key, hashtable_host[i].value});
+    //     }
+    // }
 
     std::map<uint32_t, uint32_t> res;
     for(int i = 0; i < kHashTableCapacity; i++){
-        if(hashtable_host[i].key != KEY_EMPTY){
+        if(hashtable[i].key != KEY_EMPTY){
             //std::cerr << hashtable_host[i].key << "  " << hashtable_host[i].value << "\n";
-            res.insert({hashtable_host[i].key, hashtable_host[i].value});
+            res.insert({hashtable[i].key, hashtable[i].value});
         }
     }
 
@@ -282,46 +373,44 @@ int main(){
         std::cout << "error writing file \"" << fileName << "\"" << std::endl;
 
     ///////////////////////////////////////////////////////////////////////////////
+    /*
     q.submit([&](handler& h){
         h.parallel_for(kHashTableCapacity, [=](item<1> i){
             hashtable[i].key = KEY_EMPTY;
             hashtable[i].value = 0;
         });
     });
-    const int BLOCK_X = 16;
-    const int BLOCK_Y = 1;
-    const int GRID_X = 1024;
+    const int BLOCK_X = 64;
+    const int BLOCK_Y = 16;
+    const int GRID_X = 128;
     const int GRID_Y = 1;
     const int TOTAL_THREADS = BLOCK_X * BLOCK_Y * GRID_X * GRID_Y;
     const int ENTRIES_PER_THREAD = (N / TOTAL_THREADS) + 1;
     q.wait();
     t0 = std::chrono::steady_clock::now();
     q.submit([&](handler& h){
-        //stream os(1024, 128, h);
-        
+        stream os(1024, 128, h);
         range<3> grid_dim(BLOCK_X*GRID_X,BLOCK_Y*GRID_Y,1);//get by get_global_range()
         range<3> block_dim(BLOCK_X,BLOCK_Y,1);// get_local_range()
-        sycl::local_accessor<kv> hash_acc(sycl::range<1>(kHashTableCapacity), h);
-        // h.parallel_for(nd_range<3>(range<3>(kHashTableCapacity,1,1), range<3>(128,1,1)), [=](nd_item<3> it){
-        //     //int *table = hash_acc.get_pointer();
-        //     os << "global " << it.get_global_id(0) << "\n";
-        //     //table[it.get_global_id(0)] = 0;
-        // });
+        sycl::local_accessor<kv> hash_acc(sycl::range<1>((kHashTableCapacity)), h);
         h.parallel_for(nd_range<3>(grid_dim, block_dim), [=](nd_item<3> it){
-            //init hashtable;
-            kv *table = hash_acc.get_pointer();
-            //kv table[kHashTableCapacity];
             int my_thread_id = it.get_local_id(1)*BLOCK_X + it.get_local_id(0);
             int my_block_id = it.get_group(1)*GRID_X + it.get_group(0);
+            
+            
+            kv *table = hash_acc.get_pointer();
             uint32_t key;
             uint32_t value;
-            //os << my_block_id << "\n";
-            if(my_thread_id < kHashTableCapacity){
+            for(int i = my_thread_id; i < kHashTableCapacity; i += BLOCK_X * BLOCK_Y){
                 table[my_thread_id].key = KEY_EMPTY;
                 table[my_thread_id].value = 0;
             }
+            sycl::group_barrier(it.get_group());
             int idx_start = my_block_id * BLOCK_X * BLOCK_Y;
             for(int i = idx_start; i < N; i += TOTAL_THREADS){
+                if(i+my_thread_id >= N){
+                    break;
+                }
                 key = dev_keys[i+my_thread_id];
                 value = dev_vals[i+my_thread_id];
                 uint32_t slot = lookup(table, key);
@@ -329,61 +418,84 @@ int main(){
                     auto ref = atomic_ref<
                         uint32_t, 
                         memory_order::relaxed,
-                        memory_scope::work_group,
+                        memory_scope::device,
                         access::address_space::generic_space>(table[slot].value);
                     ref.fetch_add(value);
+                    //table[slot].value += value;
                 }
                 else{
-                    insert(table, key, value);
+                    //insert_non_atomic(table, key, value);
+                    insert_nd(table, key, value);
                 }
+                //os << slot <<"\n";
             }
-            // os << "global " << it.get_global_id(0) \
-            // << " local " << it.get_local_id(0) \
-            // << " group " << it.get_group() << "\n";
-            // shm_acc[it.get_local_id(0)] = it.get_global_id(0);
-            // for(int i = 0; i<16; i++){
-            //     os << shm_acc[i];
-            // }
-
-                // uint32_t key = dev_keys[i];
-                // uint32_t value = dev_vals[i];
-                // uint32_t slot = lookup(hashtable, key);
-                // if (slot != KEY_EMPTY){
-                //     auto ref = atomic_ref<
-                //         uint32_t, 
-                //         memory_order::relaxed,
-                //         memory_scope::device,
-                //         access::address_space::global_space>(hashtable[slot].value);
-                //     ref.fetch_add(value);
-                // }
-                // else{
-                //     insert(hashtable, key, value);
-                // }
-            //}
-            //os << "done" << "\n";
+            sycl::group_barrier(it.get_group());
+            if(my_thread_id < kHashTableCapacity){
+                    if(table[my_thread_id].key != KEY_EMPTY){
+                        
+                        uint32_t key = table[my_thread_id].key;
+                        uint32_t value = table[my_thread_id].value;
+                        //insert(hashtable, key, value);
+                        uint32_t slot = lookup(hashtable, key);
+                        if (slot != KEY_EMPTY){
+                            auto ref = atomic_ref<
+                                uint32_t, 
+                                memory_order::relaxed,
+                                memory_scope::device,
+                                access::address_space::global_space>(hashtable[slot].value);
+                            ref.fetch_add(value);
+                        }
+                        else{
+                            insert(hashtable, key, value);
+                        }
+                    }
+            }
+            
         });
 
-    }).wait();//.wait();
+    });
     t1 = std::chrono::steady_clock::now();
     q.wait();
-    q.memcpy(hashtable_host, hashtable, sizeof(kv)*kHashTableCapacity).wait();
+    
     t2 = std::chrono::steady_clock::now();
     submission_time = t1 - t0;
     total_time = t2 - t0;
-    diff = t2-t1;
+    //diff = t2-t1;
+    q.memcpy(hashtable_host, hashtable, sizeof(kv)*kHashTableCapacity).wait();
 
+    std::cout << "\nshared hashtable (all threads a block share one)\n";
     std::cout << "submission time " << submission_time.count()*1000 << "ms" << "\n";
     std::cout << "total time " << total_time.count()*1000 << "ms" << "\n";
-    std::cout << "diff" << diff.count()*1000 << "ms\n";
+    //std::cout << "diff" << diff.count()*1000 << "ms\n";
+    */
+    
+    std::map<uint32_t, uint32_t> res1;
+    for(int i = 0; i < kHashTableCapacity; i++){
+        if(hashtable_host[i].key != KEY_EMPTY){
+            //std::cerr << hashtable_host[i].key << "  " << hashtable_host[i].value << "\n";
+            res1.insert({hashtable_host[i].key, hashtable_host[i].value});
+        }
+    }
 
-    
-    
+    fileName = "out.txt";
+    file.open(fileName);
+    if (!file) {
+        std::cout << "error writing file \"" << fileName << "\"" << std::endl;
+        return 0;
+    }
+    file << std::setprecision(9);
+    for (auto d : res1) {
+        file << d.first << " " << d.second << std::endl;
+    }
+    file.close();
+    if (!file)
+        std::cout << "error writing file \"" << fileName << "\"" << std::endl;
 
     
     
     sycl::free(dev_vals, q);
     sycl::free(dev_keys, q);
-    sycl::free(hashtable, q);
+    //sycl::free(hashtable, q);
     sycl::free(hashtable_host, q);
     return 0;
 }
