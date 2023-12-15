@@ -108,7 +108,6 @@ int writeFile(std::string fileName, std::unordered_map<Key, Value> &umap){
     return true;
 }
 
-<<<<<<< HEAD
 int genInputs(std::vector<Key> &ukeys, std::vector<Value> &uvalues,
                 std::vector<Key> &okeys, std::vector<Value> &ovalues,
                 unsigned int rsize, unsigned int keynum){
@@ -187,14 +186,14 @@ cudaDeviceReset();
     simpleHashAggregate(keys, values, shumap, perf);
 
 
-// cudaDeviceReset();
+cudaDeviceReset();
 
-//     localHashAggregate(keys, values, loumap, perf);
+    localHashAggregate(keys, values, loumap, perf);
 
 
-// cudaDeviceReset();
+cudaDeviceReset();
 
-//     localHashnSharedAggregate(keys, values, lsumap,0, perf);
+    localHashnSharedAggregate(keys, values, lsumap,0, perf);
 
     
 cudaDeviceReset();
@@ -207,24 +206,21 @@ cudaDeviceReset();
     cucoHashAggregate(keys, values, cuumap, perf);
 
     
-// cudaDeviceReset();
+cudaDeviceReset();
 
-//     localncucoHashAggregate(keys, values, lcumap, perf);
-
-    
-// cudaDeviceReset();
-
-//     localnsharedHashcucoAggregate(keys, values, lscumap, perf);
+    localncucoHashAggregate(keys, values, lcumap, perf);
 
     
-// cudaDeviceReset();
+cudaDeviceReset();
+
+    localnsharedHashcucoAggregate(keys, values, lscumap, perf);
+
     
-//     sharedHashcucoAggregate(keys, values, scumap, perf);
+cudaDeviceReset();
+    
+    sharedHashcucoAggregate(keys, values, scumap, perf);
 
 }
-=======
-
->>>>>>> simon
 
 int main(int argc, char** argv)
 {
@@ -234,103 +230,103 @@ int main(int argc, char** argv)
     std::vector<Value> uvalues, ovalues;
     
 
-    // std::map<std::string, std::map<unsigned int, double>> uperf, operf;
+    std::map<std::string, std::map<unsigned int, double>> uperf, operf;
 
-    std::map<unsigned int , std::map<std::string, std::map<unsigned int, double>>> uperf, operf;
-
-
-    // readFile("../testcases/inputs/in.txt", ukeys, uvalues, okeys, ovalues, 20000000);
-
-    // computestep = ukeys.size()/(GRIDSIZE*BLOCKSIZE)+1;
-    // printf("step is %u\n", computestep);
+    // std::map<unsigned int , std::map<std::string, std::map<unsigned int, double>>> uperf, operf;
 
 
-    // printf("----------------------Unsorted Keys----------------------- \n");
-    // run(ukeys, uvalues, perf);
+    readFile("../testcases/inputs/in.txt", ukeys, uvalues, okeys, ovalues, 200000);
 
-    // printf("----------------------Sorted Keys----------------------- \n");
-    // run(okeys, ovalues, perf);
+    computestep = ukeys.size()/(GRIDSIZE*BLOCKSIZE)+1;
+    printf("step is %u\n", computestep);
+
+
+    printf("----------------------Unsorted Keys----------------------- \n");
+    run(ukeys, uvalues, uperf);
+
+    printf("----------------------Sorted Keys----------------------- \n");
+    run(okeys, ovalues, operf);
 
     // int keycases = 
     // long unsigned int keysizes[keycases] = {11, 22, 33, 44, 55, 66, 77, 88, 99, 121}
 
-    int incases = 6;
-    // In K
-    long unsigned int insizes[incases]= {5,50,500,5000,50000,500000};
-    for (int i=0; i<incases; i++){
-        insizes[i] *= 1000; 
-    }
-    
-    // unsigned int keysizes [9] = {25,50,60,70,80,85,90,95,99};
-    unsigned int keysizes [2] = {25,99};
-    for(int i=0; i<2; i++){
-        keysizes[i] = keysizes[i] * KEYSIZE / 100;
-    }
-    keysizes [1] = 1023;
-    
-    // for(int i=0; i<11; i++){
-    //     printf("%d:%u ", i, keysizes[i]);
+    // int incases = 6;
+    // // In K
+    // long unsigned int insizes[incases]= {5,50,500,5000,50000,500000};
+    // for (int i=0; i<incases; i++){
+    //     insizes[i] *= 1000; 
     // }
+    
+    // // unsigned int keysizes [9] = {25,50,60,70,80,85,90,95,99};
+    // unsigned int keysizes [2] = {25,99};
+    // for(int i=0; i<2; i++){
+    //     keysizes[i] = keysizes[i] * KEYSIZE / 100;
+    // }
+    // keysizes [1] = 1023;
+    
+    // // for(int i=0; i<11; i++){
+    // //     printf("%d:%u ", i, keysizes[i]);
+    // // }
 
-    for(auto size:insizes){
-        for(auto percent:keysizes){
-            ukeys.clear();
-            uvalues.clear();
-            okeys.clear();
-            ovalues.clear();
+    // for(auto size:insizes){
+    //     for(auto percent:keysizes){
+    //         ukeys.clear();
+    //         uvalues.clear();
+    //         okeys.clear();
+    //         ovalues.clear();
             
-            // unsigned int keynum = percent * KEYSIZE / 100;
-            genInputs(ukeys, uvalues,
-                okeys, ovalues,
-                size, percent);
+    //         // unsigned int keynum = percent * KEYSIZE / 100;
+    //         genInputs(ukeys, uvalues,
+    //             okeys, ovalues,
+    //             size, percent);
             
-            printf("size is %u", size);
+    //         printf("size is %u", size);
 
     // cudaDeviceReset();
     // size_t free, total;
     // printf("\n");
     // cudaMemGetInfo(&free,&total);   
     // printf("%d B free of total %d B\n",free,total);
-            computestep = ukeys.size()/(GRIDSIZE*BLOCKSIZE)+1;
-            printf("step is %u\n", computestep);
+    //         computestep = ukeys.size()/(GRIDSIZE*BLOCKSIZE)+1;
+    //         printf("step is %u\n", computestep);
 
-            benchmark(ukeys, uvalues, uperf[percent]);
-            benchmark(okeys, ovalues, operf[percent]);            
-        }
+    //         benchmark(ukeys, uvalues, uperf[percent]);
+    //         benchmark(okeys, ovalues, operf[percent]);            
+    //     }
 
-    }
+    // }
 
-    std::string name;
-    std::string fpath = "perf/";
-    std::string uname = "1key_uperf.txt";
-    std::string oname = "1key_operf.txt";
+    // std::string name;
+    // std::string fpath = "perf/";
+    // std::string uname = "1key_uperf.txt";
+    // std::string oname = "1key_operf.txt";
 
-    FILE * pFile;
-    name = fpath + std::to_string(KEYSIZE) + uname;
-    pFile = fopen (name.c_str(),"w");
-    for(auto keynum:uperf){
-        fprintf(pFile, "KEYSIZE: %u\n", keynum.first);
-        for(auto impl:keynum.second){
-            fprintf(pFile, "\t%s: \n", impl.first.c_str());
-            for(auto size:impl.second){
-                fprintf(pFile, "\tinput size: %uK: \t%f kpair\n", size.first/1000, size.first/(size.second*1000000));
-            }
-        }
-        fprintf(pFile, "\n");
-    }
+    // FILE * pFile;
+    // name = fpath + std::to_string(KEYSIZE) + uname;
+    // pFile = fopen (name.c_str(),"w");
+    // for(auto keynum:uperf){
+    //     fprintf(pFile, "KEYSIZE: %u\n", keynum.first);
+    //     for(auto impl:keynum.second){
+    //         fprintf(pFile, "\t%s: \n", impl.first.c_str());
+    //         for(auto size:impl.second){
+    //             fprintf(pFile, "\tinput size: %uK: \t%f kpair\n", size.first/1000, size.first/(size.second*1000000));
+    //         }
+    //     }
+    //     fprintf(pFile, "\n");
+    // }
     
-    name = fpath + std::to_string(KEYSIZE) + oname;
-    pFile = fopen (name.c_str(),"w");
-    for(auto keynum:operf){
-        fprintf(pFile, "KEYSIZE: %u\n", keynum.first);
-        for(auto impl:keynum.second){
-            fprintf(pFile, "\t%s: \n", impl.first.c_str());
-            for(auto size:impl.second){
-                fprintf(pFile, "\tinput size: %uK: \t%f kpair\n", size.first/1000, size.first/(size.second*1000000));
-        }
-        fprintf(pFile, "\n");
-    }  
-    }
+    // name = fpath + std::to_string(KEYSIZE) + oname;
+    // pFile = fopen (name.c_str(),"w");
+    // for(auto keynum:operf){
+    //     fprintf(pFile, "KEYSIZE: %u\n", keynum.first);
+    //     for(auto impl:keynum.second){
+    //         fprintf(pFile, "\t%s: \n", impl.first.c_str());
+    //         for(auto size:impl.second){
+    //             fprintf(pFile, "\tinput size: %uK: \t%f kpair\n", size.first/1000, size.first/(size.second*1000000));
+    //     }
+    //     fprintf(pFile, "\n");
+    // }  
+    // }
       
     
 
