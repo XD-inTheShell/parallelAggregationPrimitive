@@ -108,6 +108,7 @@ int writeFile(std::string fileName, std::unordered_map<Key, Value> &umap){
     return true;
 }
 
+<<<<<<< HEAD
 int genInputs(std::vector<Key> &ukeys, std::vector<Value> &uvalues,
                 std::vector<Key> &okeys, std::vector<Value> &ovalues,
                 unsigned int rsize, unsigned int keynum){
@@ -221,6 +222,9 @@ cudaDeviceReset();
 //     sharedHashcucoAggregate(keys, values, scumap, perf);
 
 }
+=======
+
+>>>>>>> simon
 
 int main(int argc, char** argv)
 {

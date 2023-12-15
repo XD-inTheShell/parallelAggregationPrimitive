@@ -15,7 +15,7 @@ f = open("inputs/in.txt", "w")
 for i in range(TESTNUM):
     key = random.randrange(0, KEYRANGE, 1)
     # value = random.gauss(mu=0.0, sigma=VALRANGE)
-    value = random.randint(-VALRANGE, VALRANGE)
+    value = random.randint(0, VALRANGE)
 
     f.write(f'{key} {int(value)}\n')
 
