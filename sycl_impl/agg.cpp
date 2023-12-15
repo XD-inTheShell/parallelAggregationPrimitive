@@ -15,7 +15,7 @@
 #include <sycl/sycl.hpp>
 #include <sycl/atomic.hpp>
 
-#define kHashTableCapacity 1024//16384
+#define kHashTableCapacity 2048//16384
 #define N 10 * 1000000
 #define KEY_EMPTY 0xFFFFFFFF
 //#define KEYNUM 1
@@ -83,7 +83,7 @@ inline uint32_t hash(uint32_t k){
     k *= 0xc2b2ae35;
     k ^= k >> 16;
     return k & (kHashTableCapacity-1);
-    // return 0;
+    //return 0;
 }
 
 // void atomic_update(uint32_t* value, unint32_t*)
@@ -216,7 +216,7 @@ uint32_t lookup(kv* hashtable, uint32_t key)
 
 
 int main(){
-    ///auto selector = default_selector_v;
+    auto selector = default_selector_v;
     // auto devices = sycl::device::get_devices(sycl::info::device_type::gpu);
     // for(auto &device : devices) {
     //     sycl::queue q(device);
@@ -224,7 +224,7 @@ int main(){
     //     auto prefer_group_sizes = device.get_info<sycl::info::device::preferred_work_group_size>();
     //     std::cout << prefer_group_sizes << "\n";
     // }
-    auto selector = cpu_selector_v;
+    //auto selector = cpu_selector_v;
 
     queue q(selector, exception_handler);
 
@@ -387,8 +387,8 @@ int main(){
             uint32_t key;
             uint32_t value;
             for(int i = my_thread_id; i < kHashTableCapacity; i += BLOCK_X * BLOCK_Y){
-                table[my_thread_id].key = KEY_EMPTY;
-                table[my_thread_id].value = 0;
+                table[i].key = KEY_EMPTY;
+                table[i].value = 0;
             }
             sycl::group_barrier(it.get_group());
             int idx_start = my_block_id * BLOCK_X * BLOCK_Y;
