@@ -40,6 +40,35 @@ __device__ void localhashUpdate(KeyValue* privateHashtable,
         slot = (slot + 1) & (kHashTableCapacity-1);
     }
 }
+
+__device__ void localhash_kernel(unsigned int index, KeyValue * local_hash, 
+                                    Key * device_keys, Value * device_values,
+                                    long unsigned int cap, long unsigned int base, 
+                            unsigned int step, unsigned int const launch_thread){
+    
+    for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
+        if((i+base) < cap){
+            Key key     = device_keys[i];
+            Value value = device_values[i];
+            localhashUpdate(local_hash, key, value);
+        }
+    }
+}
+
+__device__ void prep_sharedtable(KeyValue * shared_hash){
+    int curr = 0;
+    while(true){
+        int j = threadIdx.x + curr;
+        curr += blockDim.x;
+        if(j<KEYSIZE){
+            shared_hash[j].KeyValue_s.key = kEmpty;
+            shared_hash[j].KeyValue_s.value = vEmpty;
+        }
+        else{
+            break;
+        }
+    }
+}
 __global__ void localhashAggregate(KeyValue* globalHashtable,
                             Key * device_keys, Value * device_values,
                             long unsigned int cap, long unsigned int base, 
@@ -52,13 +81,17 @@ __global__ void localhashAggregate(KeyValue* globalHashtable,
     }
 
     long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
-    for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
-        if((i+base) < cap){
-            Key key     = device_keys[i];
-            Value value = device_values[i];
-            localhashUpdate(privateHashtable, key, value);
-        }
-    }
+
+    localhash_kernel(index, privateHashtable, device_keys, device_values, cap, base, step, launch_thread);
+
+    // long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+    // for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
+    //     if((i+base) < cap){
+    //         Key key     = device_keys[i];
+    //         Value value = device_values[i];
+    //         localhashUpdate(privateHashtable, key, value);
+    //     }
+    // }
 
     // Write to global hash
     // for(int i=0; i<KEYSIZE; i++){
@@ -97,14 +130,9 @@ __global__ void localhashSharedAggregate(KeyValue* globalHashtable,
     }
 
     long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
-    for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
-        if((i+base) < cap){
-            Key key     = device_keys[i];
-            Value value = device_values[i];
-            localhashUpdate(privateHashtable, key, value);
-        }
-    }
+    localhash_kernel(index, privateHashtable, device_keys, device_values, cap, base, step, launch_thread);
 
+    __syncthreads();
     for(int i=0; i<KEYSIZE; i++){
     // for(int j=0; j<KEYSIZE; j++){
         // int i = (index + j) % KEYSIZE;
@@ -137,36 +165,74 @@ __global__ void SharedAggregate(KeyValue* globalHashtable,
                             unsigned int step, unsigned int const launch_thread){
 
     __shared__ KeyValue sharedHashtable[KEYSIZE];
-
-    for(int i=0; i<KEYSIZE; i++){
-        if(threadIdx.x==0){
-            sharedHashtable[i].KeyValue_s.key = kEmpty;
-            sharedHashtable[i].KeyValue_s.value = vEmpty;
-        }
-    }
-
     long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // int curr = 0;
+    // while(true){
+    //     int j = threadIdx.x + curr;
+    //     curr += blockDim.x;
+    //     if(j<KEYSIZE){
+    //         sharedHashtable[j].KeyValue_s.key = kEmpty;
+    //         sharedHashtable[j].KeyValue_s.value = vEmpty;
+    //     }
+    //     else{
+    //         break;
+    //     }
+    // }
+    prep_sharedtable(sharedHashtable);
+
+    // for(int i=0; i<KEYSIZE; i++){
+    //     if(threadIdx.x==0){
+    //         sharedHashtable[i].KeyValue_s.key = kEmpty;
+    //         sharedHashtable[i].KeyValue_s.value = vEmpty;
+    //     }
+    // }
+    
+    __syncthreads();
+    
+    
     for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
         if((i+base) < cap){
             Key key     = device_keys[i];
             Value value = device_values[i];
-            hashtable_update(sharedHashtable, key, value);
+            if(value!=0){
+                hashtable_update(sharedHashtable, key, value);
+            }
+            
         }
     }
 
     // Write to global hash
     __syncthreads();
-    if(threadIdx.x==0){
-        for(int i=0; i<KEYSIZE; i++){
-        // for(int j=0; j<KEYSIZE; j++){
-            // int i = (index + j) % KEYSIZE;
-            Key key = sharedHashtable[i].KeyValue_s.key;
-            if(key!=kEmpty){
-                Value value = sharedHashtable[i].KeyValue_s.value;
+
+    int curr = 0;
+    while(true){
+        int j = threadIdx.x + curr;
+        curr += blockDim.x;
+        if(j<KEYSIZE){
+            Key key = sharedHashtable[j].KeyValue_s.key;
+            Value value = sharedHashtable[j].KeyValue_s.value;
+            if(key!=kEmpty && value!=vEmpty){
                 hashtable_update(globalHashtable, key, value);
             }
         }
+        else{
+            break;
+        }
     }
+
+    
+    // if(threadIdx.x==0){
+    //     for(int i=0; i<KEYSIZE; i++){
+    //     // for(int j=0; j<KEYSIZE; j++){
+    //         // int i = (index + j) % KEYSIZE;
+    //         Key key = sharedHashtable[i].KeyValue_s.key;
+    //         Value value = sharedHashtable[i].KeyValue_s.value;
+    //         if(key!=kEmpty && value!=vEmpty){
+    //             hashtable_update(globalHashtable, key, value);
+    //         }
+    //     }
+    // }
     
 }
 // Local Hashtable and Cuco Map Aggregation ------------------------------
@@ -183,14 +249,8 @@ __global__ void localhashCucoaggregate(Map  map_view,
     }
 
     long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
-    for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
-        if((i+base) < cap){
-            Key key     = device_keys[i];
-            Value value = device_values[i];
-            localhashUpdate(privateHashtable, key, value);
-        }
-    }
-
+    localhash_kernel(index, privateHashtable, device_keys, device_values, cap, base, step, launch_thread);
+    
     // Write to global hash
     for(int i=0; i<KEYSIZE; i++){
         Key key = privateHashtable[i].KeyValue_s.key;
@@ -223,15 +283,9 @@ __global__ void localnsharedhashCucoaggregate(Map  map_view,
     }
 
     long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
-    for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
-        if((i+base) < cap){
-            Key key     = device_keys[i];
-            Value value = device_values[i];
-            localhashUpdate(privateHashtable, key, value);
-        }
-    }
+    localhash_kernel(index, privateHashtable, device_keys, device_values, cap, base, step, launch_thread);
 
-    
+    __syncthreads();
     for(int i=0; i<KEYSIZE; i++){
         Key key = privateHashtable[i].KeyValue_s.key;
         if(key!=kEmpty){
@@ -267,33 +321,26 @@ __global__ void sharedhashCucoaggregate(Map  map_view,
                             unsigned int step, unsigned int const launch_thread){
 
     __shared__ KeyValue sharedHashtable[KEYSIZE];
-    KeyValue privateHashtable[KEYSIZE];
-    for(int i=0; i<KEYSIZE; i++){
-        privateHashtable[i].KeyValue_s.key = kEmpty;
-        privateHashtable[i].KeyValue_s.value = 0;
-        if(threadIdx.x==0){
-            sharedHashtable[i].KeyValue_s.key = kEmpty;
-            sharedHashtable[i].KeyValue_s.value = vEmpty;
-        }
-    }
+
+    // for(int i=0; i<KEYSIZE; i++){
+    //     if(threadIdx.x==0){
+    //         sharedHashtable[i].KeyValue_s.key = kEmpty;
+    //         sharedHashtable[i].KeyValue_s.value = vEmpty;
+    //     }
+    // }
+
+    prep_sharedtable(sharedHashtable);
+
+    __syncthreads();
 
     long unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
     for(unsigned int i=index; i<index+step*launch_thread; i+=launch_thread){
         if((i+base) < cap){
             Key key     = device_keys[i];
             Value value = device_values[i];
-            localhashUpdate(privateHashtable, key, value);
-        }
-    }
-
-    
-    for(int i=0; i<KEYSIZE; i++){
-        Key key = privateHashtable[i].KeyValue_s.key;
-        if(key!=kEmpty){
-            Value value = privateHashtable[i].KeyValue_s.value;
-            // if(value != 0 ){
+            if(value!=0){
                 hashtable_update(sharedHashtable, key, value);
-            // }
+            }
             
         }
     }
@@ -302,17 +349,41 @@ __global__ void sharedhashCucoaggregate(Map  map_view,
     __syncthreads();
 
     // Write to global hash
-    for(int i=0; i<KEYSIZE; i++){
-        Key key = privateHashtable[i].KeyValue_s.key;
-        if(key!=kEmpty){
-            Value value = privateHashtable[i].KeyValue_s.value;
-            auto [slot, is_new_key] = map_view.insert_and_find({key, value});
-            if (!is_new_key) {
-                 // key is already in the map -> increment count
-                slot->second.fetch_add(value, cuda::memory_order_relaxed);
+
+    int curr = 0;
+    while(true){
+        int j = threadIdx.x + curr;
+        curr += blockDim.x;
+        if(j<KEYSIZE){
+            Key key = sharedHashtable[j].KeyValue_s.key;
+            Value value = sharedHashtable[j].KeyValue_s.value;
+            if(key!=kEmpty && value!=vEmpty){
+                auto [slot, is_new_key] = map_view.insert_and_find({key, value});
+                if (!is_new_key) {
+                    // key is already in the map -> increment count
+                    slot->second.fetch_add(value, cuda::memory_order_relaxed);
+                }
             }
         }
+        else{
+            break;
+        }
     }
+
+    // for(int i=0; i<KEYSIZE; i++){
+    //     if(threadIdx.x==0){
+    //         Key key = sharedHashtable[i].KeyValue_s.key;
+    //         Value value = sharedHashtable[i].KeyValue_s.value;
+    //         if(key!=kEmpty && value!=0){
+    //             auto [slot, is_new_key] = map_view.insert_and_find({key, value});
+    //             if (!is_new_key) {
+    //                 // key is already in the map -> increment count
+    //                 slot->second.fetch_add(value, cuda::memory_order_relaxed);
+    //             }
+    //         }
+    //     }
+        
+    // }
 }
 
 int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::unordered_map<Key, Value> &umap
@@ -322,7 +393,7 @@ int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, 
     auto constexpr block_size   = BLOCKSIZE;
     auto const grid_size        = GRIDSIZE;
     unsigned int const launch_thread = block_size * grid_size;
-    auto const launch_size      = launch_thread * PERTHREADSTEP;
+    auto const launch_size      = launch_thread * computestep;
 
     // Malloc
     Key * device_keys;
@@ -376,7 +447,7 @@ int localncucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, 
     // checkCuda();
     // cucohashAggregateKernel<<<grid_size, block_size>>>(device_insert_view,
     //             device_keys, device_values,
-    //             numEntries, 0,  PERTHREADSTEP, launch_thread);
+    //             numEntries, 0,  computestep, launch_thread);
 
     thrust::device_vector<Key> contained_keys(KEYSIZE);
     thrust::device_vector<Value> contained_values(KEYSIZE);
@@ -401,7 +472,7 @@ int localnsharedHashcucoAggregate(std::vector<Key> &keys, std::vector<Value> &va
     auto constexpr block_size   = BLOCKSIZE;
     auto const grid_size        = GRIDSIZE;
     unsigned int const launch_thread = block_size * grid_size;
-    auto const launch_size      = launch_thread * PERTHREADSTEP;
+    auto const launch_size      = launch_thread * computestep;
 
     // Malloc
     Key * device_keys;
@@ -455,7 +526,7 @@ int localnsharedHashcucoAggregate(std::vector<Key> &keys, std::vector<Value> &va
     // checkCuda();
     // cucohashAggregateKernel<<<grid_size, block_size>>>(device_insert_view,
     //             device_keys, device_values,
-    //             numEntries, 0,  PERTHREADSTEP, launch_thread);
+    //             numEntries, 0,  computestep, launch_thread);
 
     thrust::device_vector<Key> contained_keys(KEYSIZE);
     thrust::device_vector<Value> contained_values(KEYSIZE);
@@ -480,7 +551,7 @@ int sharedHashcucoAggregate(std::vector<Key> &keys, std::vector<Value> &values, 
     auto constexpr block_size   = BLOCKSIZE;
     auto const grid_size        = GRIDSIZE;
     unsigned int const launch_thread = block_size * grid_size;
-    auto const launch_size      = launch_thread * PERTHREADSTEP;
+    auto const launch_size      = launch_thread * computestep;
 
     // Malloc
     Key * device_keys;
@@ -534,7 +605,7 @@ int sharedHashcucoAggregate(std::vector<Key> &keys, std::vector<Value> &values, 
     // checkCuda();
     // cucohashAggregateKernel<<<grid_size, block_size>>>(device_insert_view,
     //             device_keys, device_values,
-    //             numEntries, 0,  PERTHREADSTEP, launch_thread);
+    //             numEntries, 0,  computestep, launch_thread);
 
     thrust::device_vector<Key> contained_keys(KEYSIZE);
     thrust::device_vector<Value> contained_values(KEYSIZE);

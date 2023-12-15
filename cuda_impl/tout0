@@ -1,0 +1,46 @@
+/home/xiying/parallelAggregationPrimitive/seq_impl
+/home/xiying/parallelAggregationPrimitive/cuda_impl
+HI
+step is 47
+----------------------Unsorted Keys----------------------- 
+start from 0, compute size 1000000
+Simple Hash Executed for: 1.486 ms
+start from 0, compute size 1000000
+Local Hash Executed for: 6.977 ms
+start from 0, compute size 1000000
+Local Hash & Shared Hash Executed for: 4.597 ms
+start from 0, compute size 1000000
+Shared Hash Executed for: 0.611 ms
+start from 0, compute size 1000000
+Cuco Hash Executed for: 0.866 ms
+start from 0, compute size 1000000
+Local Hash & Cuco Aggregate Executed for: 2.881 ms
+start from 0, compute size 1000000
+Local & Shared Hash and Cuco Aggregate Executed for: 4.366 ms
+start from 0, compute size 1000000
+Shared Hash and Cuco Aggregate Executed for: 0.547 ms
+----------------------Sorted Keys----------------------- 
+start from 0, compute size 1000000
+Simple Hash Executed for: 0.261 ms
+start from 0, compute size 1000000
+Local Hash Executed for: 5.884 ms
+start from 0, compute size 1000000
+Local Hash & Shared Hash Executed for: 1.838 ms
+start from 0, compute size 1000000
+Shared Hash Executed for: 0.157 ms
+start from 0, compute size 1000000
+Cuco Hash Executed for: 0.178 ms
+start from 0, compute size 1000000
+Local Hash & Cuco Aggregate Executed for: 1.465 ms
+start from 0, compute size 1000000
+Local & Shared Hash and Cuco Aggregate Executed for: 2.208 ms
+start from 0, compute size 1000000
+Shared Hash and Cuco Aggregate Executed for: 0.114 ms
+shout
+loout
+lsout
+sout
+cuout
+lcout
+lscout
+scout

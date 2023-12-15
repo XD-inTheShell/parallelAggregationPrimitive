@@ -1,1 +1,35 @@
-shared hash: 1000000, 0.333056
+cucohash: 
+input size: 1M: 	4217.075668 kpair
+input size: 5M: 	7422.634164 kpair
+input size: 10M: 	9536.292807 kpair
+input size: 20M: 	10214.746633 kpair
+localhash: 
+input size: 1M: 	179.508589 kpair
+input size: 5M: 	385.518086 kpair
+input size: 10M: 	692.175510 kpair
+input size: 20M: 	1283.930936 kpair
+localhashnshared: 
+input size: 1M: 	561.926265 kpair
+input size: 5M: 	2037.061758 kpair
+input size: 10M: 	3464.804326 kpair
+input size: 20M: 	5260.173047 kpair
+localncucohash: 
+input size: 1M: 	458.167719 kpair
+input size: 5M: 	1877.716086 kpair
+input size: 10M: 	3030.451426 kpair
+input size: 20M: 	4219.675776 kpair
+shared hash: 
+input size: 1M: 	6018.346484 kpair
+input size: 5M: 	16331.268893 kpair
+input size: 10M: 	20245.499091 kpair
+input size: 20M: 	21929.216353 kpair
+sharedCuco: 
+input size: 1M: 	6268.952921 kpair
+input size: 5M: 	15712.171481 kpair
+input size: 10M: 	17760.941359 kpair
+input size: 20M: 	21995.898875 kpair
+simplehash: 
+input size: 1M: 	4121.648314 kpair
+input size: 5M: 	8832.884857 kpair
+input size: 10M: 	11481.317513 kpair
+input size: 20M: 	11697.350005 kpair

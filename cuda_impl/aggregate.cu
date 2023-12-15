@@ -47,7 +47,7 @@ int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std:
     auto constexpr block_size   = BLOCKSIZE;
     auto const grid_size        = GRIDSIZE;
     unsigned int const launch_thread = block_size * grid_size;
-    auto const launch_size      = launch_thread * PERTHREADSTEP;
+    auto const launch_size      = launch_thread * computestep;
  
     // Malloc
     Key * device_keys;
@@ -95,7 +95,7 @@ int simpleHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std:
     //     printf("grid block %d %d\n", grid_size, block_size);
     // simplehashAggregate<<<grid_size, block_size>>>(devic_hashtable,
     //             device_keys, device_values,
-    //             3, 0,  PERTHREADSTEP, launch_thread);
+    //             3, 0,  computestep, launch_thread);
             
     // checkCuda();
 
@@ -112,7 +112,7 @@ int localHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::
     auto constexpr block_size   = BLOCKSIZE;
     auto const grid_size        = GRIDSIZE;
     unsigned int const launch_thread = block_size * grid_size;
-    auto const launch_size      = launch_thread * PERTHREADSTEP;
+    auto const launch_size      = launch_thread * computestep;
 
     // Malloc
     Key * device_keys;
@@ -164,7 +164,7 @@ int localHashnSharedAggregate(std::vector<Key> &keys, std::vector<Value> &values
     auto constexpr block_size   = BLOCKSIZE;
     auto const grid_size        = GRIDSIZE;
     unsigned int const launch_thread = block_size * grid_size;
-    auto const launch_size      = launch_thread * PERTHREADSTEP;
+    auto const launch_size      = launch_thread * computestep;
 
     // Malloc
     Key * device_keys;
@@ -217,7 +217,7 @@ int sharedHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std:
     auto constexpr block_size   = BLOCKSIZE;
     auto const grid_size        = GRIDSIZE;
     unsigned int const launch_thread = block_size * grid_size;
-    auto const launch_size      = launch_thread * PERTHREADSTEP;
+    auto const launch_size      = launch_thread * computestep;
 
     // Malloc
     Key * device_keys;
@@ -300,7 +300,7 @@ int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::u
     auto constexpr block_size   = BLOCKSIZE;
     auto const grid_size        = GRIDSIZE;
     unsigned int const launch_thread = block_size * grid_size;
-    auto const launch_size      = launch_thread * PERTHREADSTEP;
+    auto const launch_size      = launch_thread * computestep;
 
     // Malloc
     Key * device_keys;
@@ -354,7 +354,7 @@ int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::u
     // checkCuda();
     // cucohashAggregateKernel<<<grid_size, block_size>>>(device_insert_view,
     //             device_keys, device_values,
-    //             numEntries, 0,  PERTHREADSTEP, launch_thread);
+    //             numEntries, 0,  computestep, launch_thread);
 
     thrust::device_vector<Key> contained_keys(KEYSIZE);
     thrust::device_vector<Value> contained_values(KEYSIZE);
@@ -379,7 +379,7 @@ int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::u
 //     auto constexpr block_size   = BLOCKSIZE;
 //     auto const grid_size        = GRIDSIZE;
 //     unsigned int const launch_thread = block_size * grid_size;
-//     auto const launch_size      = launch_thread * PERTHREADSTEP;
+//     auto const launch_size      = launch_thread * computestep;
 
 //     // Malloc
 //     Key * device_keys;
@@ -414,7 +414,7 @@ int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::u
 //         double startTime = CycleTimer::currentSeconds();
 //         localhashCucoaggregate<<<grid_size, block_size>>>(device_insert_view,
 //                 device_keys, device_values,
-//                 numEntries, i,  PERTHREADSTEP, launch_thread);
+//                 numEntries, i,  computestep, launch_thread);
 //         cudaThreadSynchronize();
 //         double endTime = CycleTimer::currentSeconds();    
 //         double overallDuration = endTime - startTime;
@@ -429,7 +429,7 @@ int cucoHashAggregate(std::vector<Key> &keys, std::vector<Value> &values, std::u
 //     // checkCuda();
 //     // cucohashAggregateKernel<<<grid_size, block_size>>>(device_insert_view,
 //     //             device_keys, device_values,
-//     //             numEntries, 0,  PERTHREADSTEP, launch_thread);
+//     //             numEntries, 0,  computestep, launch_thread);
 
 //     thrust::device_vector<Key> contained_keys(KEYSIZE);
 //     thrust::device_vector<Value> contained_values(KEYSIZE);

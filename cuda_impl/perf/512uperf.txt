@@ -1,0 +1,90 @@
+KEYSIZE: 25
+	cucohash: 
+	input size: 10M: 	4.879729 kpair
+	shared hash: 
+	input size: 10M: 	22.336121 kpair
+	sharedCuco: 
+	input size: 10M: 	22.419620 kpair
+	simplehash: 
+	input size: 10M: 	5.629100 kpair
+
+KEYSIZE: 50
+	cucohash: 
+	input size: 10M: 	3.256933 kpair
+	shared hash: 
+	input size: 10M: 	14.487252 kpair
+	sharedCuco: 
+	input size: 10M: 	14.643957 kpair
+	simplehash: 
+	input size: 10M: 	5.202874 kpair
+
+KEYSIZE: 60
+	cucohash: 
+	input size: 10M: 	3.120599 kpair
+	shared hash: 
+	input size: 10M: 	17.454792 kpair
+	sharedCuco: 
+	input size: 10M: 	17.624252 kpair
+	simplehash: 
+	input size: 10M: 	5.723984 kpair
+
+KEYSIZE: 70
+	cucohash: 
+	input size: 10M: 	2.537766 kpair
+	shared hash: 
+	input size: 10M: 	16.610308 kpair
+	sharedCuco: 
+	input size: 10M: 	16.517581 kpair
+	simplehash: 
+	input size: 10M: 	5.642818 kpair
+
+KEYSIZE: 80
+	cucohash: 
+	input size: 10M: 	1.455168 kpair
+	shared hash: 
+	input size: 10M: 	11.508343 kpair
+	sharedCuco: 
+	input size: 10M: 	11.471629 kpair
+	simplehash: 
+	input size: 10M: 	4.893694 kpair
+
+KEYSIZE: 85
+	cucohash: 
+	input size: 10M: 	1.233871 kpair
+	shared hash: 
+	input size: 10M: 	8.407131 kpair
+	sharedCuco: 
+	input size: 10M: 	8.190803 kpair
+	simplehash: 
+	input size: 10M: 	4.060177 kpair
+
+KEYSIZE: 90
+	cucohash: 
+	input size: 10M: 	0.773967 kpair
+	shared hash: 
+	input size: 10M: 	8.669004 kpair
+	sharedCuco: 
+	input size: 10M: 	8.476897 kpair
+	simplehash: 
+	input size: 10M: 	3.500261 kpair
+
+KEYSIZE: 95
+	cucohash: 
+	input size: 10M: 	0.510993 kpair
+	shared hash: 
+	input size: 10M: 	5.477075 kpair
+	sharedCuco: 
+	input size: 10M: 	5.369564 kpair
+	simplehash: 
+	input size: 10M: 	2.235511 kpair
+
+KEYSIZE: 99
+	cucohash: 
+	input size: 10M: 	0.322430 kpair
+	shared hash: 
+	input size: 10M: 	3.043616 kpair
+	sharedCuco: 
+	input size: 10M: 	2.889943 kpair
+	simplehash: 
+	input size: 10M: 	1.740267 kpair
+

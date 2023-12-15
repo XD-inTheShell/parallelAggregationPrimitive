@@ -1,0 +1,14 @@
+cucohash: 
+input size: 10M: 	1.513930 kpair
+localhash: 
+input size: 10M: 	22.829924 kpair
+localhashnshared: 
+input size: 10M: 	23.359930 kpair
+localncucohash: 
+input size: 10M: 	21.481795 kpair
+shared hash: 
+input size: 10M: 	26.676114 kpair
+sharedCuco: 
+input size: 10M: 	26.735658 kpair
+simplehash: 
+input size: 10M: 	1.666585 kpair

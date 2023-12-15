@@ -1,7 +1,8 @@
 import random
 
-TESTNUM = 1000000
-KEYSIZE = 2047
+TESTNUM = 10000000
+
+KEYSIZE = 127
 KEYRANGE = 20000
 VALRANGE = 10
 
@@ -18,7 +19,8 @@ for i in range(TESTNUM):
     keyindex = random.randrange(0, KEYSIZE, 1)
     key = keys[keyindex]
     # value = random.gauss(mu=0.0, sigma=VALRANGE)
-    value = random.randint(0, VALRANGE)
+    # value = random.randint(0, VALRANGE)
+    value = 1
 
     f.write(f'{key} {int(value)}\n')
 

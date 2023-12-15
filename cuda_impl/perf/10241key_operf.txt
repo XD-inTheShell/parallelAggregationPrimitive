@@ -1,0 +1,50 @@
+KEYSIZE: 256
+	cucohash: 
+	input size: 5K: 	0.362998 kpair
+	input size: 50K: 	1.032403 kpair
+	input size: 500K: 	1.459007 kpair
+	input size: 5000K: 	1.510043 kpair
+	input size: 50000K: 	1.649655 kpair
+	input size: 500000K: 	1.653402 kpair
+
+	shared hash: 
+	input size: 5K: 	0.503973 kpair
+	input size: 50K: 	4.525448 kpair
+	input size: 500K: 	18.807838 kpair
+	input size: 5000K: 	25.862173 kpair
+	input size: 50000K: 	28.961075 kpair
+	input size: 500000K: 	29.243588 kpair
+
+	simplehash: 
+	input size: 5K: 	0.341021 kpair
+	input size: 50K: 	0.815698 kpair
+	input size: 500K: 	1.517203 kpair
+	input size: 5000K: 	1.659599 kpair
+	input size: 50000K: 	1.717764 kpair
+	input size: 500000K: 	1.817792 kpair
+
+KEYSIZE: 1023
+	cucohash: 
+	input size: 5K: 	0.367559 kpair
+	input size: 50K: 	1.036569 kpair
+	input size: 500K: 	1.459837 kpair
+	input size: 5000K: 	1.511974 kpair
+	input size: 50000K: 	1.649754 kpair
+	input size: 500000K: 	1.651973 kpair
+
+	shared hash: 
+	input size: 5K: 	0.504446 kpair
+	input size: 50K: 	4.661147 kpair
+	input size: 500K: 	18.428670 kpair
+	input size: 5000K: 	25.874065 kpair
+	input size: 50000K: 	28.951774 kpair
+	input size: 500000K: 	29.240307 kpair
+
+	simplehash: 
+	input size: 5K: 	0.325767 kpair
+	input size: 50K: 	0.834689 kpair
+	input size: 500K: 	1.518943 kpair
+	input size: 5000K: 	1.659640 kpair
+	input size: 50000K: 	1.820726 kpair
+	input size: 500000K: 	1.817037 kpair
+

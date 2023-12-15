@@ -1,0 +1,42 @@
+cucohash: 
+input size: 1M: 	4.070694 kpair
+input size: 5M: 	8.044634 kpair
+input size: 10M: 	8.389912 kpair
+input size: 100M: 	9.526556 kpair
+input size: 200M: 	9.870892 kpair
+localhash: 
+input size: 1M: 	0.145654 kpair
+input size: 5M: 	0.525239 kpair
+input size: 10M: 	0.998007 kpair
+input size: 100M: 	5.349812 kpair
+input size: 200M: 	7.408535 kpair
+localhashnshared: 
+input size: 1M: 	0.301984 kpair
+input size: 5M: 	1.307519 kpair
+input size: 10M: 	2.340145 kpair
+input size: 100M: 	6.284689 kpair
+input size: 200M: 	7.888980 kpair
+localncucohash: 
+input size: 1M: 	0.281418 kpair
+input size: 5M: 	1.241642 kpair
+input size: 10M: 	2.082971 kpair
+input size: 100M: 	6.015146 kpair
+input size: 200M: 	7.607572 kpair
+shared hash: 
+input size: 1M: 	10.964382 kpair
+input size: 5M: 	19.460467 kpair
+input size: 10M: 	21.378050 kpair
+input size: 100M: 	17.492860 kpair
+input size: 200M: 	17.838593 kpair
+sharedCuco: 
+input size: 1M: 	6.584589 kpair
+input size: 5M: 	17.770990 kpair
+input size: 10M: 	19.548699 kpair
+input size: 100M: 	17.558744 kpair
+input size: 200M: 	17.890223 kpair
+simplehash: 
+input size: 1M: 	5.428244 kpair
+input size: 5M: 	8.077666 kpair
+input size: 10M: 	9.106412 kpair
+input size: 100M: 	11.177177 kpair
+input size: 200M: 	11.433521 kpair
